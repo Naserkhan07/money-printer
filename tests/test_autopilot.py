@@ -110,6 +110,116 @@ class TestAutopilot(unittest.TestCase):
         self.assertTrue(repository.is_autopilot_seen("short456"))
         self.assertTrue(not links_file.exists() or links_file.read_text() == "")
 
+    def test_sync_latest_videos_queues_recent_per_channel(self) -> None:
+        repository = JobRepository(self.tmp_path / "jobs.db")
+        links_file = self.tmp_path / "links.txt"
+        channel = AutopilotChannel(name="Test Creator", channel_id="UC1234567890123456789012")
+        service = AutopilotService(
+            channels=[channel],
+            repository=repository,
+            recent_per_channel=2,
+        )
+
+        feed = """<?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">
+          <title>Creator Channel</title>
+          <entry>
+            <id>yt:video:new1</id>
+            <yt:videoId>new1</yt:videoId>
+            <yt:channelId>UC1234567890123456789012</yt:channelId>
+            <title>Newest Video</title>
+            <link rel="alternate" href="https://www.youtube.com/watch?v=new1"/>
+            <published>2026-11-06T10:00:00+00:00</published>
+          </entry>
+          <entry>
+            <id>yt:video:new2</id>
+            <yt:videoId>new2</yt:videoId>
+            <yt:channelId>UC1234567890123456789012</yt:channelId>
+            <title>Second Newest</title>
+            <link rel="alternate" href="https://www.youtube.com/watch?v=new2"/>
+            <published>2026-11-04T10:00:00+00:00</published>
+          </entry>
+          <entry>
+            <id>yt:video:new3</id>
+            <yt:videoId>new3</yt:videoId>
+            <yt:channelId>UC1234567890123456789012</yt:channelId>
+            <title>Third Newest</title>
+            <link rel="alternate" href="https://www.youtube.com/watch?v=new3"/>
+            <published>2026-11-02T10:00:00+00:00</published>
+          </entry>
+        </feed>
+        """
+
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_response = MagicMock()
+            mock_response.read.return_value = feed.encode("utf-8")
+            mock_response.__enter__.return_value = mock_response
+            mock_urlopen.return_value = mock_response
+
+            synced = service.sync_latest_videos(links_file)
+
+        self.assertEqual([v.video_id for v in synced], ["new1", "new2"])
+        content = links_file.read_text(encoding="utf-8")
+        self.assertIn("watch?v=new1", content)
+        self.assertIn("watch?v=new2", content)
+        self.assertNotIn("watch?v=new3", content)
+        self.assertTrue(repository.is_autopilot_seen("new1"))
+        self.assertTrue(repository.is_autopilot_seen("new2"))
+        self.assertTrue(repository.is_autopilot_seen("new3"))
+
+    def test_check_for_new_videos_queues_recent_per_channel(self) -> None:
+        repository = JobRepository(self.tmp_path / "jobs.db")
+        links_file = self.tmp_path / "links.txt"
+        channel = AutopilotChannel(name="Test Creator", channel_id="UC1234567890123456789012")
+        service = AutopilotService(
+            channels=[channel],
+            repository=repository,
+            recent_per_channel=2,
+        )
+
+        feed = """<?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">
+          <title>Creator Channel</title>
+          <entry>
+            <id>yt:video:up3</id>
+            <yt:videoId>up3</yt:videoId>
+            <yt:channelId>UC1234567890123456789012</yt:channelId>
+            <title>Upload Three</title>
+            <link rel="alternate" href="https://www.youtube.com/watch?v=up3"/>
+            <published>2026-11-07T10:00:00+00:00</published>
+          </entry>
+          <entry>
+            <id>yt:video:up2</id>
+            <yt:videoId>up2</yt:videoId>
+            <yt:channelId>UC1234567890123456789012</yt:channelId>
+            <title>Upload Two</title>
+            <link rel="alternate" href="https://www.youtube.com/watch?v=up2"/>
+            <published>2026-11-05T10:00:00+00:00</published>
+          </entry>
+          <entry>
+            <id>yt:video:up1</id>
+            <yt:videoId>up1</yt:videoId>
+            <yt:channelId>UC1234567890123456789012</yt:channelId>
+            <title>Upload One</title>
+            <link rel="alternate" href="https://www.youtube.com/watch?v=up1"/>
+            <published>2026-11-01T10:00:00+00:00</published>
+          </entry>
+        </feed>
+        """
+
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_response = MagicMock()
+            mock_response.read.return_value = feed.encode("utf-8")
+            mock_response.__enter__.return_value = mock_response
+            mock_urlopen.return_value = mock_response
+
+            new_videos = asyncio.run(service.check_for_new_videos(links_file))
+
+        self.assertEqual([v.video_id for v in new_videos], ["up3", "up2"])
+        self.assertTrue(repository.is_autopilot_seen("up1"))
+        self.assertFalse(repository.is_autopilot_seen("up3"))
+        self.assertFalse(repository.is_autopilot_seen("up2"))
+
     def test_detects_new_videos_after_baseline(self) -> None:
         repository = JobRepository(self.tmp_path / "jobs.db")
         links_file = self.tmp_path / "links.txt"
@@ -162,6 +272,7 @@ class TestAutopilot(unittest.TestCase):
             poll_interval_minutes = 20
             ignore_shorts = true
             queue_latest_on_start = true
+            recent_per_channel = 3
 
             [[autopilot.channels]]
             name = "MrBeast"
@@ -180,6 +291,7 @@ class TestAutopilot(unittest.TestCase):
             self.assertEqual(settings.autopilot_poll_minutes, 20)
             self.assertTrue(settings.autopilot_ignore_shorts)
             self.assertTrue(settings.autopilot_queue_latest_on_start)
+            self.assertEqual(settings.autopilot_recent_per_channel, 3)
             self.assertEqual(len(settings.autopilot_channels), 2)
             self.assertEqual(settings.autopilot_channels[0]["name"], "MrBeast")
             self.assertEqual(settings.autopilot_channels[0]["channel_id"], "UCX6OQ3DkcsbYNE6H8uQQuVA")

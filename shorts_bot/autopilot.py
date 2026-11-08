@@ -108,6 +108,7 @@ class AutopilotService:
         ignore_shorts: bool = True,
         queue_latest_on_start: bool = False,
         enabled: bool = True,
+        recent_per_channel: int = 1,
     ) -> None:
         self.channels = channels
         self.repository = repository
@@ -115,6 +116,7 @@ class AutopilotService:
         self.ignore_shorts = ignore_shorts
         self.queue_latest_on_start = queue_latest_on_start
         self.enabled = enabled
+        self.recent_per_channel = max(1, int(recent_per_channel))
 
     @property
     def poll_interval_seconds(self) -> int:
@@ -141,6 +143,7 @@ class AutopilotService:
             ignore_shorts=settings.autopilot_ignore_shorts,
             queue_latest_on_start=settings.autopilot_queue_latest_on_start,
             enabled=settings.autopilot_enabled,
+            recent_per_channel=settings.autopilot_recent_per_channel,
         )
 
     def _fetch_channel_videos_ytdlp(
@@ -284,9 +287,9 @@ class AutopilotService:
 
     def sync_latest_videos(self, links_file: Path) -> list[AutopilotVideo]:
         """
-        Updates links.txt with the single newest video from each monitored channel,
-        removing older duplicate entries, and records them in SQLite so they are NEVER
-        taken again.
+        Updates links.txt with the newest ``recent_per_channel`` video(s) from each
+        monitored channel (1 = the single newest only), removing older duplicate
+        entries, and records them in SQLite so they are NEVER taken again.
         """
         latest_videos: list[AutopilotVideo] = []
         links_file.parent.mkdir(parents=True, exist_ok=True)
@@ -301,21 +304,23 @@ class AutopilotService:
             if not eligible:
                 continue
 
-            top = eligible[0]
-            latest_videos.append(top)
+            chosen = eligible[: self.recent_per_channel]
+            chosen_ids = {v.video_id for v in chosen}
+            latest_videos.extend(chosen)
 
-            # Mark top as queued (never take it again)
-            self.repository.mark_autopilot_seen(
-                top.video_id,
-                top.channel_id,
-                top.title,
-                top.published_at,
-                queued=True,
-            )
+            # Mark chosen videos as queued (never take them again)
+            for picked in chosen:
+                self.repository.mark_autopilot_seen(
+                    picked.video_id,
+                    picked.channel_id,
+                    picked.title,
+                    picked.published_at,
+                    queued=True,
+                )
 
             # Mark all older videos from this channel as seen (never take them)
             for older in videos:
-                if older.video_id != top.video_id:
+                if older.video_id not in chosen_ids:
                     self.repository.mark_autopilot_seen(
                         older.video_id,
                         older.channel_id,
@@ -344,8 +349,8 @@ class AutopilotService:
     ) -> int:
         """Ensure channels have seen baselines established on first run.
 
-        If queue_latest_on_start is True, synchronizes links.txt with the latest video
-        from each channel.
+        If queue_latest_on_start is True, synchronizes links.txt with the newest
+        video(s) from each channel (see ``recent_per_channel``).
         """
         if self.queue_latest_on_start:
             latest = self.sync_latest_videos(links_file)
@@ -385,6 +390,28 @@ class AutopilotService:
                 for v in eligible:
                     if not self.is_video_known(v.video_id, links_file, downloaded_log):
                         new_videos.append(v)
+            elif self.recent_per_channel > 1:
+                # Queue the N newest unseen eligible videos per channel; everything
+                # older is recorded as seen so it never floods links.txt later.
+                unseen = [
+                    v
+                    for v in eligible
+                    if not self.is_video_known(v.video_id, links_file, downloaded_log)
+                ]
+                fresh = unseen[: self.recent_per_channel]
+                fresh_ids = {v.video_id for v in fresh}
+                new_videos.extend(fresh)
+                for v in eligible:
+                    if v.video_id in fresh_ids:
+                        continue
+                    if not self.repository.is_autopilot_seen(v.video_id):
+                        self.repository.mark_autopilot_seen(
+                            v.video_id,
+                            v.channel_id,
+                            v.title,
+                            v.published_at,
+                            queued=False,
+                        )
             else:
                 latest = eligible[0]
                 if not self.is_video_known(latest.video_id, links_file, downloaded_log):
@@ -470,12 +497,15 @@ def main() -> None:
     group.add_argument(
         "--sync",
         action="store_true",
-        help="Update links.txt with the single newest video from all creators, replacing old links",
+        help=(
+            "Update links.txt with the newest videos from all creators "
+            "(see recent_per_channel in channels.toml), replacing old links"
+        ),
     )
     group.add_argument(
         "--fetch-latest",
         action="store_true",
-        help="Synchronize the single newest video from each channel into links.txt",
+        help="Synchronize the newest video(s) from each channel into links.txt",
     )
     group.add_argument(
         "--backfill",
@@ -523,9 +553,14 @@ def main() -> None:
         return
 
     if args.sync or args.fetch_latest:
-        print("Synchronizing links.txt with the single newest video from each channel...")
+        per_channel = service.recent_per_channel
+        if per_channel == 1:
+            label = "the single newest video"
+        else:
+            label = f"the {per_channel} newest videos"
+        print(f"Synchronizing links.txt with {label} from each channel...")
         synced = service.sync_latest_videos(settings.links_file)
-        print(f"Synchronized {len(synced)} newest video(s) into {settings.links_file}:")
+        print(f"Synchronized {len(synced)} video(s) into {settings.links_file}:")
         for v in synced:
             print(f"  + [{v.channel_name}] {v.title} -> {v.watch_url}")
         return

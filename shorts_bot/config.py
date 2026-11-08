@@ -151,6 +151,7 @@ class Settings:
     autopilot_poll_minutes: int
     autopilot_ignore_shorts: bool
     autopilot_queue_latest_on_start: bool
+    autopilot_recent_per_channel: int
     autopilot_channels: tuple[dict[str, str], ...]
     gameplay_dir: Path
     gameplay_rotation: tuple[str, ...]
@@ -211,6 +212,10 @@ class Settings:
                             "handle": str(ch.get("handle", "")).strip(),
                         }
                     )
+        try:
+            autopilot_recent_default = int(autopilot_section.get("recent_per_channel", 1) or 1)
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError("AUTOPILOT_RECENT_PER_CHANNEL must be an integer.") from exc
         legacy_auto_upload = _bool_env("AUTO_UPLOAD", False)
 
         settings = cls(
@@ -332,6 +337,10 @@ class Settings:
             autopilot_queue_latest_on_start=_bool_env(
                 "AUTOPILOT_QUEUE_LATEST_ON_START",
                 bool(autopilot_section.get("queue_latest_on_start", False)),
+            ),
+            autopilot_recent_per_channel=_int_env(
+                "AUTOPILOT_RECENT_PER_CHANNEL",
+                autopilot_recent_default,
             ),
             autopilot_channels=tuple(parsed_channels),
             gameplay_dir=Path(os.getenv("GAMEPLAY_DIR", "assets/gameplay")).expanduser(),
@@ -470,6 +479,8 @@ class Settings:
             raise ConfigurationError("PENDING_RETRY_JOBS_PER_CYCLE must be between 1 and 20.")
         if not 1 <= self.autopilot_poll_minutes <= 1_440:
             raise ConfigurationError("AUTOPILOT_POLL_MINUTES must be between 1 and 1440.")
+        if not 1 <= self.autopilot_recent_per_channel <= 15:
+            raise ConfigurationError("AUTOPILOT_RECENT_PER_CHANNEL must be between 1 and 15.")
         if (
             self.ytdlp_cookies_from_browser
             and self.ytdlp_cookies_from_browser not in _SUPPORTED_COOKIE_BROWSERS

@@ -46,7 +46,10 @@ max_daily_facebook  = 10
 enabled = true
 poll_interval_minutes = 15      # Check every 15 minutes
 ignore_shorts = true            # Strictly filter out Shorts; only take full-length regular videos
-queue_latest_on_start = true    # Automatically queues latest videos on start, no manual links.txt entry needed!
+queue_latest_on_start = true    # Automatically queues videos on start, no manual links.txt entry needed!
+# How many of the newest full-length videos to queue per channel each sync/poll
+# (1 = only the very latest upload). 3 queues the latest + 2 most recent videos.
+recent_per_channel = 3
 
 [[autopilot.channels]]
 name = "MrBeast"
@@ -95,3 +98,27 @@ channel_id = "UCj22tfcQrWG7EMEKS0qLeEg"
 [[autopilot.channels]]
 name = "Warangal Diaries"
 channel_id = "UCWSyWK6oS5VL3RrJZuWsdSA"
+
+[[autopilot.channels]]
+name = "DiscoveryChannelInd"    # Discovery Channel India (@DiscoverychannelInd)
+channel_id = "UCBLF5teKEUzTN5gZ2zgR0kQ"
+
+[[autopilot.channels]]
+name = "Shakeel Bhai"           # Hyderabadi comedy (@ShakeelBhaiOfficial)
+channel_id = "UCAkMKodEd1z5lDo-e0MY5WA"
+
+[[autopilot.channels]]
+name = "Grox"                   # Minecraft (@groxmc)
+channel_id = "UCK5vUVoJsEVc7JeXQ8XiX7w"
+
+[[autopilot.channels]]
+name = "Wemmbu"                 # Minecraft (@wemmbumc)
+channel_id = "UCkzzNLnuM-VsATWC53ehwOQ"
+
+[[autopilot.channels]]
+name = "FlameFrags"             # Minecraft (@flamefragsmc)
+channel_id = "UCvYPobTo42NM36X7VC4dLhA"
+
+[[autopilot.channels]]
+name = "Donut"                  # DrDonut — Donut SMP (@drdonutt)
+channel_id = "UCPYZ-R5LQGMeU7QikgxmH8Q"

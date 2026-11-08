@@ -112,7 +112,7 @@ The bot includes an automated channel watcher that monitors your favorite YouTub
 
 ### Configured Creators
 
-12 channels are pre-configured in `channels.toml`:
+18 channels are pre-configured in `channels.toml`:
 1. **MrBeast** (`@MrBeast`)
 2. **Outdoor Boys** (`@OutdoorBoys`)
 3. **Nick DiGiovanni** (`@NickDiGiovanni`)
@@ -125,10 +125,17 @@ The bot includes an automated channel watcher that monitors your favorite YouTub
 10. **Samay Raina** (`@SamayRainaOfficial`)
 11. **CarryMinati** (`@CarryMinati`)
 12. **Warangal Diaries** (`@WarangalDiaries`)
+13. **DiscoveryChannelInd** (`@DiscoverychannelInd`) — Discovery Channel India
+14. **Shakeel Bhai** (`@ShakeelBhaiOfficial`) — Hyderabadi comedy
+15. **Grox** (`@groxmc`) — Minecraft
+16. **Wemmbu** (`@wemmbumc`) — Minecraft
+17. **FlameFrags** (`@flamefragsmc`) — Minecraft
+18. **Donut** (`@drdonutt`) — DrDonut, Donut SMP
 
 ### How it works
 - Uses YouTube's official Atom RSS feeds — fast, zero authentication required, and zero API quota consumption.
 - Automatically filters out existing YouTube Shorts (`ignore_shorts = true`) so you only process long-form content.
+- Queues the **latest + 2 most recent** full-length videos per channel on each sync/poll — controlled by `recent_per_channel = 3` in the `[autopilot]` section of `channels.toml` (set it to `1` for only the very latest upload, or raise it up to `15` to grab more recent uploads per channel). Can also be overridden with the `AUTOPILOT_RECENT_PER_CHANNEL` environment variable.
 - Multi-layer deduplication ensures the same video is never queued twice.
 - Automatically establishes a baseline on startup so historical uploads are not spammed into your queue.
 - Checks in the background every 15 minutes when `python main.py` is running.
@@ -143,7 +150,7 @@ The bot includes an automated channel watcher that monitors your favorite YouTub
   ```powershell
   python -m shorts_bot.autopilot --check
   ```
-* **Force-queue the single latest video from each channel:**
+* **Force-queue the newest video(s) from each channel** (how many per channel is controlled by `recent_per_channel` in `channels.toml`):
   ```powershell
   python -m shorts_bot.autopilot --fetch-latest
   ```
