@@ -12,6 +12,11 @@ NEON_YELLOW = "&H0000E6FF&"  # Vibrant Electric Yellow (#FFE600 in RGB)
 NEON_CYAN = "&H00FFFF00&"    # Electric Cyan (#00FFFF in RGB)
 COLOR_WHITE = "&H00FFFFFF&"  # Pure White (#FFFFFF in RGB)
 COLOR_BLACK = "&H00000000&"  # Pure Black Outline
+# Semi-transparent white (alpha 0x80) used for the soft glow underlay so the halo
+# blooms gently behind the crisp captions without veiling the text.
+COLOR_WHITE_SOFT = "&H80FFFFFF&"
+# Strength of the soft neon glow halo behind every caption event (ASS blur units).
+GLOW_BLUR = 4
 
 DEFAULT_HIGHLIGHT_COLORS = (NEON_GREEN, NEON_YELLOW, NEON_CYAN)
 
@@ -147,6 +152,20 @@ class CaptionStyle:
     highlight_colors: tuple[str, ...] = DEFAULT_HIGHLIGHT_COLORS
     max_words_per_line: int = 3
     max_lines_per_chunk: int = 2
+
+
+def _render_chunk_text(
+    formatted_words: Sequence[str],
+    max_words_per_line: int,
+    base_color: str,
+) -> str:
+    """Joins chunk words, breaking into two lines past ``max_words_per_line``."""
+    if len(formatted_words) > max_words_per_line:
+        split_at = max_words_per_line
+        line1 = " ".join(formatted_words[:split_at])
+        line2 = " ".join(formatted_words[split_at:])
+        return f"{{\\c{base_color}}}{line1}\\N{line2}"
+    return f"{{\\c{base_color}}}" + " ".join(formatted_words)
 
 
 def format_ass_time(seconds: float) -> str:
@@ -415,26 +434,36 @@ def build_ass_subtitles(
             # Build line text with formatting
             # Break into 2 lines if count exceeds max_words_per_line
             formatted_words: list[str] = []
+            glow_words: list[str] = []
             for j, _ in enumerate(chunk):
                 w_clean = chunk_texts[j]
                 if j == i:
                     # Highlighted active word!
                     formatted_words.append(f"{{\\c{highlight_col}}}{w_clean}{{\\c{style.primary_color}}}")
+                    # Neon halo for the glow underlay behind the crisp text
+                    glow_words.append(f"{{\\c{highlight_col}}}{w_clean}{{\\c{COLOR_WHITE_SOFT}}}")
                 else:
                     formatted_words.append(w_clean)
+                    glow_words.append(w_clean)
 
-            if len(formatted_words) > style.max_words_per_line:
-                split_at = style.max_words_per_line
-                line1 = " ".join(formatted_words[:split_at])
-                line2 = " ".join(formatted_words[split_at:])
-                display_text = f"{{\\c{style.primary_color}}}{line1}\\N{line2}"
-            else:
-                display_text = f"{{\\c{style.primary_color}}}" + " ".join(formatted_words)
+            display_text = _render_chunk_text(
+                formatted_words, style.max_words_per_line, style.primary_color
+            )
+            # Soft neon glow halo: semi-transparent blurred copy behind the crisp
+            # caption. The active word blooms in its highlight color; the rest of
+            # the line gets a gentle white bloom.
+            glow_text = f"{{\\blur{GLOW_BLUR}}}" + _render_chunk_text(
+                glow_words, style.max_words_per_line, COLOR_WHITE_SOFT
+            )
 
             start_str = format_ass_time(w_start)
             end_str = format_ass_time(w_end)
+            # Layer 0 = glow underlay, Layer 1 = crisp caption text
             lines.append(
-                f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{display_text}"
+                f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{glow_text}"
+            )
+            lines.append(
+                f"Dialogue: 1,{start_str},{end_str},Default,,0,0,0,,{display_text}"
             )
 
     return "\n".join(lines) + "\n"

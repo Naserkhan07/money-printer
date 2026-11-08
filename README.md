@@ -184,13 +184,16 @@ python -m shorts_bot.gameplay
 
 ## ✨ Dynamic Viral Glowing Captions
 
-Captions are generated directly from Whisper speech recognition with word-by-word active glow animation:
+Captions are generated directly from Whisper speech recognition with word-by-word active glow animation — **every rendered video ships with them by default** (`ENABLE_CAPTIONS=true`), with no noticeable delay between the spoken word and its on-screen highlight:
 - **Bold Uppercase Typography**: Center-aligned between the primary video and the gameplay clip for maximum viewer focus.
 - **Glowing Word Highlights**: Active words spoken in real-time glow in vibrant neon colors:
   - Electric Lime/Green (`&H0066FF00&`)
   - Electric Yellow (`&H0000E6FF&`)
   - Electric Cyan (`&H00FFFF00&`)
+- **Soft Neon Glow Halo**: Each caption event is drawn twice — a blurred semi-transparent underlay (`\blur4`, Layer 0) creates a gentle glow behind the text while the crisp white text sits on top (Layer 1). The active word blooms in its neon highlight color; the rest of the line blooms in soft white.
+- **Word-Level Sync**: Whisper is called with `timestamp_granularities=["word", "segment"]`; word timings are re-indexed to each clip's start offset, so captions appear the moment the word is spoken. If the word stream is unavailable the pipeline falls back to segment interpolation, and logs a loud warning (instead of failing silently) if a clip would render without subtitles.
 - **Fast-Paced Chunking**: 2 to 4 words per display chunk for viral retention.
+- **Hinglish Support**: Devanagari transcript text is transliterated to readable Roman Hindi so Hindi speech renders cleanly.
 - **Configuration** in `.env`:
   ```ini
   ENABLE_CAPTIONS=true

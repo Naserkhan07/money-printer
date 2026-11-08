@@ -628,6 +628,12 @@ class WorkflowPipeline:
                     if not words and full_transcript:
                         words = parse_whisper_result(full_transcript)
 
+                    if not words:
+                        logger.warning(
+                            "No transcript words parsed for clip %d; "
+                            "video will render WITHOUT subtitles.",
+                            clip.clip_index,
+                        )
                     if words:
                         ass_file = job_dir / f"captions-{clip.clip_index:03d}.ass"
                         style = CaptionStyle(

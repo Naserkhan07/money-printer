@@ -94,6 +94,25 @@ class CaptionsTestCase(unittest.TestCase):
         # Check neon highlight color
         self.assertIn(r"\c&H0066FF00&", ass_content)
 
+    def test_build_ass_subtitles_has_glow_underlay(self) -> None:
+        words = [
+            TimedWord("BUY", 0.0, 0.4),
+            TimedWord("THE", 0.4, 0.6),
+            TimedWord("DIP", 0.6, 1.1),
+        ]
+        ass_content = build_ass_subtitles(words, clip_start=0.0, clip_duration=5.0)
+        glow_events = [ln for ln in ass_content.splitlines() if ln.startswith("Dialogue: 0,")]
+        crisp_events = [ln for ln in ass_content.splitlines() if ln.startswith("Dialogue: 1,")]
+        # Same number of glow underlay (Layer 0) and crisp (Layer 1) events
+        self.assertEqual(len(glow_events), len(crisp_events))
+        self.assertGreater(len(crisp_events), 0)
+        for glow in glow_events:
+            self.assertIn("\\blur", glow)
+        # Crisp events keep the uppercase text and neon active-word highlight
+        for crisp in crisp_events:
+            self.assertNotIn("\\blur", crisp)
+        self.assertIn(r"\c&H0066FF00&", ass_content)
+
     def test_create_caption_file(self) -> None:
         with TemporaryDirectory() as tmpdir:
             out_file = Path(tmpdir) / "captions.ass"
