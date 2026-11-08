@@ -1,0 +1,757 @@
+from __future__ import annotations
+
+import sqlite3
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+
+from .models import Job, JobClip, JobStatus, ShortPlan
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    chat_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    source_url TEXT NOT NULL,
+    status TEXT NOT NULL,
+    progress_message TEXT NOT NULL DEFAULT '',
+    source_title TEXT,
+    short_title TEXT,
+    short_description TEXT,
+    instagram_caption TEXT,
+    output_path TEXT,
+    youtube_video_id TEXT,
+    instagram_media_id TEXT,
+    instagram_url TEXT,
+    facebook_video_id TEXT,
+    facebook_url TEXT,
+    archive_path TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_user_created ON jobs(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+
+CREATE TABLE IF NOT EXISTS job_clips (
+    job_id TEXT NOT NULL,
+    clip_index INTEGER NOT NULL,
+    start_seconds REAL NOT NULL,
+    duration_seconds REAL NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    instagram_caption TEXT NOT NULL,
+    metadata_ready INTEGER NOT NULL DEFAULT 0,
+    enhancement_complete INTEGER NOT NULL DEFAULT 0,
+    output_path TEXT,
+    thumbnail_path TEXT,
+    youtube_video_id TEXT,
+    instagram_media_id TEXT,
+    instagram_url TEXT,
+    facebook_video_id TEXT,
+    facebook_url TEXT,
+    error TEXT,
+    PRIMARY KEY (job_id, clip_index),
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_job_clips_job ON job_clips(job_id, clip_index);
+
+CREATE TABLE IF NOT EXISTS autopilot_seen (
+    video_id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    published_at TEXT,
+    seen_at TEXT NOT NULL,
+    queued INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS used_gameplay (
+    category TEXT NOT NULL,
+    video_identifier TEXT NOT NULL,
+    used_for_job_id TEXT,
+    used_at TEXT NOT NULL,
+    PRIMARY KEY (category, video_identifier)
+);
+
+CREATE TABLE IF NOT EXISTS platform_uploads (
+    platform TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    clip_index INTEGER NOT NULL,
+    media_id TEXT NOT NULL,
+    uploaded_at TEXT NOT NULL,
+    PRIMARY KEY (platform, job_id, clip_index)
+);
+
+CREATE TABLE IF NOT EXISTS video_stats (
+    video_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    views INTEGER NOT NULL DEFAULT 0,
+    likes INTEGER NOT NULL DEFAULT 0,
+    comments INTEGER NOT NULL DEFAULT 0,
+    fetched_at TEXT NOT NULL
+);
+"""
+
+_MIGRATION_COLUMNS = {
+    "instagram_caption": "TEXT",
+    "instagram_media_id": "TEXT",
+    "instagram_url": "TEXT",
+    "facebook_video_id": "TEXT",
+    "facebook_url": "TEXT",
+    "archive_path": "TEXT",
+}
+_CLIP_MIGRATION_COLUMNS = {
+    "thumbnail_path": "TEXT",
+    "metadata_ready": "INTEGER NOT NULL DEFAULT 0",
+    "enhancement_complete": "INTEGER NOT NULL DEFAULT 0",
+    "facebook_video_id": "TEXT",
+    "facebook_url": "TEXT",
+}
+
+
+class JobRepository:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self._connect() as connection:
+            connection.executescript(_SCHEMA)
+            existing = {
+                row["name"] for row in connection.execute("PRAGMA table_info(jobs)").fetchall()
+            }
+            for name, column_type in _MIGRATION_COLUMNS.items():
+                if name not in existing:
+                    connection.execute(f"ALTER TABLE jobs ADD COLUMN {name} {column_type}")
+
+            existing_clip_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(job_clips)").fetchall()
+            }
+            for name, column_type in _CLIP_MIGRATION_COLUMNS.items():
+                if name not in existing_clip_columns:
+                    connection.execute(f"ALTER TABLE job_clips ADD COLUMN {name} {column_type}")
+
+            # Meta can return Page Reel permalinks as paths such as /reel/123/. Normalize
+            # previously stored values so manifests and progress output always contain links.
+            connection.execute(
+                """
+                UPDATE jobs
+                SET facebook_url = 'https://www.facebook.com' || facebook_url
+                WHERE facebook_url LIKE '/%'
+                """
+            )
+            connection.execute(
+                """
+                UPDATE job_clips
+                SET facebook_url = 'https://www.facebook.com' || facebook_url
+                WHERE facebook_url LIKE '/%'
+                """
+            )
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.path, timeout=30)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    @staticmethod
+    def _now() -> str:
+        return datetime.now(UTC).isoformat(timespec="seconds")
+
+    @staticmethod
+    def _from_row(row: sqlite3.Row) -> Job:
+        return Job(
+            id=row["id"],
+            chat_id=row["chat_id"],
+            user_id=row["user_id"],
+            source_url=row["source_url"],
+            status=JobStatus(row["status"]),
+            progress_message=row["progress_message"],
+            source_title=row["source_title"],
+            short_title=row["short_title"],
+            short_description=row["short_description"],
+            instagram_caption=row["instagram_caption"],
+            output_path=row["output_path"],
+            youtube_video_id=row["youtube_video_id"],
+            instagram_media_id=row["instagram_media_id"],
+            instagram_url=row["instagram_url"],
+            facebook_video_id=row["facebook_video_id"],
+            facebook_url=row["facebook_url"],
+            archive_path=row["archive_path"],
+            error=row["error"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    def _clip_from_row(row: sqlite3.Row) -> JobClip:
+        return JobClip(
+            job_id=row["job_id"],
+            clip_index=row["clip_index"],
+            start_seconds=row["start_seconds"],
+            duration_seconds=row["duration_seconds"],
+            title=row["title"],
+            description=row["description"],
+            instagram_caption=row["instagram_caption"],
+            metadata_ready=bool(row["metadata_ready"]),
+            enhancement_complete=bool(row["enhancement_complete"]),
+            output_path=row["output_path"],
+            thumbnail_path=row["thumbnail_path"],
+            youtube_video_id=row["youtube_video_id"],
+            instagram_media_id=row["instagram_media_id"],
+            instagram_url=row["instagram_url"],
+            facebook_video_id=row["facebook_video_id"],
+            facebook_url=row["facebook_url"],
+            error=row["error"],
+        )
+
+    def create(self, chat_id: int, user_id: int, source_url: str) -> Job:
+        job_id = uuid.uuid4().hex[:12]
+        now = self._now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO jobs (
+                    id, chat_id, user_id, source_url, status, progress_message,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job_id,
+                    chat_id,
+                    user_id,
+                    source_url,
+                    JobStatus.QUEUED.value,
+                    "Waiting in queue",
+                    now,
+                    now,
+                ),
+            )
+        job = self.get(job_id)
+        assert job is not None
+        return job
+
+    def get(self, job_id: str) -> Job | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        return self._from_row(row) if row else None
+
+    def update(self, job_id: str, **fields: str | JobStatus | None) -> Job:
+        allowed = {
+            "status",
+            "progress_message",
+            "source_title",
+            "short_title",
+            "short_description",
+            "instagram_caption",
+            "output_path",
+            "youtube_video_id",
+            "instagram_media_id",
+            "instagram_url",
+            "facebook_video_id",
+            "facebook_url",
+            "archive_path",
+            "error",
+        }
+        unknown = fields.keys() - allowed
+        if unknown:
+            raise ValueError(f"Unknown job fields: {', '.join(sorted(unknown))}")
+        if "status" in fields and isinstance(fields["status"], JobStatus):
+            fields["status"] = fields["status"].value
+        fields["updated_at"] = self._now()
+        assignments = ", ".join(f"{key} = ?" for key in fields)
+        values = [*fields.values(), job_id]
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"UPDATE jobs SET {assignments} WHERE id = ?",  # noqa: S608
+                values,
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(f"Unknown job {job_id}")
+        job = self.get(job_id)
+        assert job is not None
+        return job
+
+    def save_plans(
+        self,
+        job_id: str,
+        plans: list[ShortPlan],
+        metadata_ready: bool = True,
+    ) -> list[JobClip]:
+        with self._connect() as connection:
+            for clip_index, plan in enumerate(plans, start=1):
+                connection.execute(
+                    """
+                    INSERT INTO job_clips (
+                        job_id, clip_index, start_seconds, duration_seconds,
+                        title, description, instagram_caption, metadata_ready
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(job_id, clip_index) DO UPDATE SET
+                        start_seconds = excluded.start_seconds,
+                        duration_seconds = excluded.duration_seconds,
+                        title = excluded.title,
+                        description = excluded.description,
+                        instagram_caption = excluded.instagram_caption,
+                        metadata_ready = excluded.metadata_ready,
+                        error = NULL
+                    """,
+                    (
+                        job_id,
+                        clip_index,
+                        plan.start_seconds,
+                        plan.duration_seconds,
+                        plan.title,
+                        plan.description,
+                        plan.instagram_caption,
+                        int(metadata_ready),
+                    ),
+                )
+        return self.list_clips(job_id)
+
+    def list_clips(self, job_id: str) -> list[JobClip]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM job_clips WHERE job_id = ? ORDER BY clip_index",
+                (job_id,),
+            ).fetchall()
+        return [self._clip_from_row(row) for row in rows]
+
+    def update_clip(self, job_id: str, clip_index: int, **fields: object) -> JobClip:
+        allowed = {
+            "start_seconds",
+            "duration_seconds",
+            "title",
+            "description",
+            "instagram_caption",
+            "metadata_ready",
+            "enhancement_complete",
+            "output_path",
+            "thumbnail_path",
+            "youtube_video_id",
+            "instagram_media_id",
+            "instagram_url",
+            "facebook_video_id",
+            "facebook_url",
+            "error",
+        }
+        unknown = fields.keys() - allowed
+        if unknown:
+            raise ValueError(f"Unknown clip fields: {', '.join(sorted(unknown))}")
+        assignments = ", ".join(f"{key} = ?" for key in fields)
+        values = [*fields.values(), job_id, clip_index]
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"UPDATE job_clips SET {assignments} WHERE job_id = ? AND clip_index = ?",  # noqa: S608
+                values,
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(f"Unknown clip {job_id}/{clip_index}")
+            row = connection.execute(
+                "SELECT * FROM job_clips WHERE job_id = ? AND clip_index = ?",
+                (job_id, clip_index),
+            ).fetchone()
+        assert row is not None
+        return self._clip_from_row(row)
+
+    def reset_clip_media(self, job_id: str) -> list[JobClip]:
+        existing = self.list_clips(job_id)
+        if not existing:
+            return []
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE job_clips
+                SET metadata_ready = 0, enhancement_complete = 0,
+                    output_path = NULL, thumbnail_path = NULL,
+                    youtube_video_id = NULL, instagram_media_id = NULL,
+                    instagram_url = NULL, facebook_video_id = NULL,
+                    facebook_url = NULL, error = NULL
+                WHERE job_id = ?
+                """,
+                (job_id,),
+            )
+            connection.execute(
+                """
+                UPDATE jobs
+                SET output_path = NULL, youtube_video_id = NULL,
+                    instagram_media_id = NULL, instagram_url = NULL,
+                    facebook_video_id = NULL, facebook_url = NULL,
+                    archive_path = NULL, error = NULL
+                WHERE id = ?
+                """,
+                (job_id,),
+            )
+        return existing
+
+    def list_recent(self, user_id: int, limit: int = 10) -> list[Job]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
+
+    def list_queued(self) -> list[Job]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM jobs WHERE status = ? ORDER BY created_at",
+                (JobStatus.QUEUED.value,),
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
+
+    def pending_upload_counts(self) -> dict[str, int]:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    SUM(CASE WHEN output_path IS NOT NULL AND youtube_video_id IS NULL
+                        THEN 1 ELSE 0 END) AS youtube,
+                    SUM(CASE WHEN output_path IS NOT NULL AND instagram_media_id IS NULL
+                        THEN 1 ELSE 0 END) AS instagram,
+                    SUM(CASE WHEN output_path IS NOT NULL AND facebook_video_id IS NULL
+                        THEN 1 ELSE 0 END) AS facebook
+                FROM job_clips
+                """
+            ).fetchone()
+        return {
+            "YouTube": int(row["youtube"] or 0),
+            "Instagram": int(row["instagram"] or 0),
+            "Facebook": int(row["facebook"] or 0),
+        }
+
+    def list_pending_upload_jobs(
+        self,
+        *,
+        youtube: bool,
+        instagram: bool,
+        facebook: bool,
+        limit: int = 3,
+    ) -> list[Job]:
+        if not youtube and not instagram and not facebook:
+            return []
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT jobs.*
+                FROM jobs
+                JOIN job_clips ON job_clips.job_id = jobs.id
+                WHERE job_clips.output_path IS NOT NULL
+                  AND ((? = 1 AND job_clips.youtube_video_id IS NULL)
+                    OR (? = 1 AND job_clips.instagram_media_id IS NULL)
+                    OR (? = 1 AND job_clips.facebook_video_id IS NULL))
+                  AND jobs.status IN (?, ?)
+                ORDER BY jobs.updated_at ASC
+                LIMIT ?
+                """,
+                (
+                    int(youtube),
+                    int(instagram),
+                    int(facebook),
+                    JobStatus.COMPLETE.value,
+                    JobStatus.FAILED.value,
+                    limit,
+                ),
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
+
+    def clip_sequence_index(self, job_id: str, clip_index: int) -> int:
+        with self._connect() as connection:
+            current = connection.execute(
+                "SELECT created_at FROM jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+            if current is None:
+                raise KeyError(f"Unknown job {job_id}")
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS preceding
+                FROM job_clips
+                JOIN jobs ON jobs.id = job_clips.job_id
+                WHERE jobs.created_at < ?
+                   OR (jobs.created_at = ? AND jobs.id < ?)
+                   OR (jobs.id = ? AND job_clips.clip_index < ?)
+                """,
+                (current["created_at"], current["created_at"], job_id, job_id, clip_index),
+            ).fetchone()
+        return int(row["preceding"])
+
+    def is_autopilot_seen(self, video_id: str) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM autopilot_seen WHERE video_id = ?",
+                (video_id,),
+            ).fetchone()
+            return row is not None
+
+    def is_video_queued_or_processed(self, video_id: str) -> bool:
+        """Check if video was previously queued or processed (ensuring it is NEVER taken again)."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM autopilot_seen WHERE video_id = ? AND queued = 1 LIMIT 1",
+                (video_id,),
+            ).fetchone()
+            if row is not None:
+                return True
+            job_row = connection.execute(
+                "SELECT 1 FROM jobs WHERE source_url LIKE ? LIMIT 1",
+                (f"%{video_id}%",),
+            ).fetchone()
+            return job_row is not None
+
+    def list_autopilot_seen_ids(self) -> set[str]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT video_id FROM autopilot_seen").fetchall()
+            return {row["video_id"] for row in rows}
+
+    def has_channel_queued_video(self, channel_id: str) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM autopilot_seen WHERE channel_id = ? AND queued = 1 LIMIT 1",
+                (channel_id,),
+            ).fetchone()
+            return row is not None
+
+    def mark_autopilot_seen(
+        self,
+        video_id: str,
+        channel_id: str,
+        title: str,
+        published_at: str | None = None,
+        queued: bool = False,
+    ) -> None:
+        now = self._now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO autopilot_seen (
+                    video_id, channel_id, title, published_at, seen_at, queued
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (video_id, channel_id, title, published_at or "", now, 1 if queued else 0),
+            )
+
+    def is_gameplay_used(self, category: str, video_identifier: str) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM used_gameplay WHERE category = ? AND video_identifier = ? LIMIT 1",
+                (category, video_identifier),
+            ).fetchone()
+            return row is not None
+
+    def mark_gameplay_used(
+        self, category: str, video_identifier: str, job_id: str | None = None
+    ) -> None:
+        now = self._now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO used_gameplay (
+                    category, video_identifier, used_for_job_id, used_at
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (category, video_identifier, job_id, now),
+            )
+
+    def get_used_gameplay(self, category: str | None = None) -> set[str]:
+        with self._connect() as connection:
+            if category:
+                rows = connection.execute(
+                    "SELECT video_identifier FROM used_gameplay WHERE category = ?",
+                    (category,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT video_identifier FROM used_gameplay"
+                ).fetchall()
+            return {row["video_identifier"] for row in rows}
+
+    def has_platform_upload(self, platform: str, job_id: str, clip_index: int) -> bool:
+        """True when a platform upload was recorded for this clip."""
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT 1 FROM platform_uploads
+                WHERE platform = ? AND job_id = ? AND clip_index = ?
+                LIMIT 1
+                """,
+                (platform, job_id, clip_index),
+            ).fetchone()
+        return row is not None
+
+    def record_platform_upload(
+        self,
+        platform: str,
+        job_id: str,
+        clip_index: int,
+        media_id: str,
+        uploaded_at: str | None = None,
+    ) -> None:
+        now = uploaded_at or self._now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO platform_uploads (platform, job_id, clip_index, media_id, uploaded_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (platform, job_id, clip_index, media_id, now),
+            )
+
+    def get_platform_upload_count(
+        self, platform: str, date_prefix: str | None = None
+    ) -> int:
+        from datetime import UTC, datetime, timedelta, timezone
+        target_date = date_prefix or datetime.now(UTC).strftime("%Y-%m-%d")
+        ist = timezone(timedelta(hours=5, minutes=30))
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT uploaded_at FROM platform_uploads
+                WHERE platform = ?
+                """,
+                (platform,),
+            ).fetchall()
+            count = 0
+            for r in rows:
+                if not r["uploaded_at"]:
+                    continue
+                raw = str(r["uploaded_at"])
+                if raw.endswith("Z"):
+                    raw = raw[:-1] + "+00:00"
+                try:
+                    dt = datetime.fromisoformat(raw)
+                    dt_ist = dt.astimezone(ist) if dt.tzinfo is not None else dt.replace(tzinfo=UTC).astimezone(ist)
+                    if dt_ist.strftime("%Y-%m-%d") == target_date:
+                        count += 1
+                except Exception:
+                    if raw.startswith(target_date):
+                        count += 1
+            if count > 0:
+                return count
+
+            col_map = {
+                "YouTube": "youtube_video_id",
+                "Instagram": "instagram_media_id",
+                "Facebook": "facebook_video_id",
+            }
+            col = col_map.get(platform)
+            if col:
+                fallback_row = connection.execute(
+                    f"""
+                    SELECT COUNT(*) as cnt FROM job_clips c
+                    JOIN jobs j ON j.id = c.job_id
+                    WHERE c.{col} IS NOT NULL AND c.{col} != ''
+                    AND (j.created_at LIKE ? OR j.updated_at LIKE ?)
+                    """,
+                    (f"{target_date}%", f"{target_date}%"),
+                ).fetchone()
+                if fallback_row:
+                    return int(fallback_row["cnt"])
+        return 0
+
+    def get_last_platform_upload_time(self, platform: str) -> datetime | None:
+        from datetime import UTC, datetime
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT uploaded_at FROM platform_uploads
+                WHERE platform = ?
+                ORDER BY uploaded_at DESC
+                LIMIT 1
+                """,
+                (platform,),
+            ).fetchone()
+            if row and row["uploaded_at"]:
+                try:
+                    raw = str(row["uploaded_at"])
+                    if raw.endswith("Z"):
+                        raw = raw[:-1] + "+00:00"
+                    dt = datetime.fromisoformat(raw)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=UTC)
+                    return dt
+                except Exception:
+                    pass
+        return None
+
+    def fail_interrupted(self) -> int:
+        running = (
+            JobStatus.DOWNLOADING,
+            JobStatus.ANALYZING,
+            JobStatus.RENDERING,
+            JobStatus.UPLOADING,
+        )
+        placeholders = ",".join("?" for _ in running)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"""
+                UPDATE jobs
+                SET status = ?, progress_message = ?, error = ?, updated_at = ?
+                WHERE status IN ({placeholders})
+                """,  # noqa: S608
+                (
+                    JobStatus.FAILED.value,
+                    "Stopped when the service restarted",
+                    "The worker stopped before this job finished. Submit it again.",
+                    self._now(),
+                    *(status.value for status in running),
+                ),
+            )
+            return cursor.rowcount
+    def list_youtube_video_ids(self) -> list[str]:
+        """All distinct YouTube video IDs recorded for clips and jobs."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT youtube_video_id FROM (
+                    SELECT youtube_video_id FROM job_clips
+                    WHERE youtube_video_id IS NOT NULL AND youtube_video_id != ''
+                    UNION
+                    SELECT youtube_video_id FROM jobs
+                    WHERE youtube_video_id IS NOT NULL AND youtube_video_id != ''
+                )
+                """
+            ).fetchall()
+        return [str(row["youtube_video_id"]) for row in rows]
+
+    def upsert_video_stats(self, stats: list[dict[str, object]]) -> int:
+        """Insert or refresh cached YouTube statistics. Returns rows written."""
+        now = self._now()
+        written = 0
+        with self._connect() as connection:
+            for row in stats:
+                video_id = str(row.get("video_id") or "").strip()
+                if not video_id:
+                    continue
+                connection.execute(
+                    """
+                    INSERT INTO video_stats (video_id, title, views, likes, comments, fetched_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(video_id) DO UPDATE SET
+                        title = excluded.title,
+                        views = excluded.views,
+                        likes = excluded.likes,
+                        comments = excluded.comments,
+                        fetched_at = excluded.fetched_at
+                    """,
+                    (
+                        video_id,
+                        str(row.get("title") or "")[:300],
+                        int(row.get("views") or 0),
+                        int(row.get("likes") or 0),
+                        int(row.get("comments") or 0),
+                        now,
+                    ),
+                )
+                written += 1
+        return written
+
+    def list_video_stats(self, limit: int = 25) -> list[dict[str, object]]:
+        """Cached YouTube statistics, most viewed first."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT video_id, title, views, likes, comments, fetched_at
+                FROM video_stats
+                ORDER BY views DESC, fetched_at DESC
+                LIMIT ?
+                """,
+                (max(1, int(limit)),),
+            ).fetchall()
+        return [dict(row) for row in rows]
