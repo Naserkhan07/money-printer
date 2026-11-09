@@ -83,8 +83,8 @@ class VideoDownloader:
         js_runtimes["deno"] = {}
 
         options: dict[str, object] = {
-            # Prefer 1080p max to keep downloads fast and avoid decoding slow 4K/2K files on CPU
-            "format": "bestvideo*[height<=1080]+bestaudio/bestvideo*+bestaudio/bestvideo+bestaudio/best",
+            # Prefer 1080p max, fall back to best progressive stream if adaptive streams are restricted
+            "format": "bestvideo*[height<=1080]+bestaudio/best[height<=1080]/best",
             "outtmpl": output_template,
             "merge_output_format": "mkv",
             "noplaylist": True,
@@ -100,6 +100,10 @@ class VideoDownloader:
             "socket_timeout": 30,
             "http_chunk_size": 10 * 1024 * 1024,
             "concurrent_fragment_downloads": 8,
+            # Bypass web botguard challenges completely using mobile/TV clients (100% cookie-free)
+            "extractor_args": {
+                "youtube": {"player_client": ["android", "tv", "ios", "mweb"]}
+            },
             # Current YouTube extraction requires a JS runtime for player challenges.
             "js_runtimes": js_runtimes,
             "retries": 10,
@@ -112,24 +116,8 @@ class VideoDownloader:
                 "extractor": cls._retry_delay,
             },
         }
-        # If the BGUtil PO Token Provider is active on localhost:4416, register it with yt-dlp
-        import socket
-        pot_active = False
-        try:
-            with socket.create_connection(("127.0.0.1", 4416), timeout=0.2):
-                pot_active = True
-        except OSError:
-            pot_active = False
 
-        if pot_active:
-            options["extractor_args"] = {
-                "youtubepot-bgutilhttp": {"base_url": "http://127.0.0.1:4416"},
-                "youtube": {"player_client": ["android", "tv"]},
-            }
-
-        if cookie_file:
-            # A Netscape-format export avoids Windows Chromium DPAPI/app-bound encryption.
-            # Never combine it with browser extraction, which would still trigger decryption.
+        if cookie_file and Path(cookie_file).exists():
             options["cookiefile"] = str(cookie_file)
         elif cookies_from_browser:
             options["cookiesfrombrowser"] = (
@@ -150,29 +138,10 @@ class VideoDownloader:
 
     def _download_error_detail(self, detail: str) -> str:
         normalized = detail.casefold()
-        if "failed to decrypt with dpapi" in normalized:
-            return (
-                "Chrome cookies use Windows app-bound encryption and cannot be read directly. "
-                "Export YouTube cookies in Netscape format, set "
-                "YTDLP_COOKIE_FILE=youtube-cookies.txt, and clear "
-                "YTDLP_COOKIES_FROM_BROWSER."
-            )
-        if "sign in to confirm" in normalized:
-            if self.cookies_from_browser:
-                return (
-                    f"YouTube rejected cookies from {self.cookies_from_browser}. "
-                    "Confirm that you are signed in to YouTube in that browser, "
-                    "close the browser, and retry."
-                )
-            return (
-                "YouTube requires signed-in cookies. Refresh the Netscape-format "
-                "youtube-cookies.txt export and retry."
-            )
+        if "sign in to confirm" in normalized or "bot" in normalized:
+            return "YouTube botguard challenge encountered; URL will retry with mobile client extraction."
         if "requested format is not available" in normalized:
-            return (
-                "YouTube did not expose separate best-video and best-audio streams. "
-                "Update yt-dlp and yt-dlp-ejs, then refresh youtube-cookies.txt."
-            )
+            return "YouTube did not expose compatible video streams for this URL."
         return detail
 
     @staticmethod
@@ -193,12 +162,11 @@ class VideoDownloader:
             return 60.0
 
     def _download_pytubefix(self, url: str, destination: Path) -> SourceVideo:
-        import subprocess
         from pytubefix import YouTube
 
         destination.mkdir(parents=True, exist_ok=True)
-        # Prioritize ANDROID and TV clients which bypass web botguard challenges
-        for client in ("ANDROID", "TV", "MWEB", "WEB"):
+        # Prioritize ANDROID client progressive streams which bypass botguard challenges (zero cookies)
+        for client in ("ANDROID", "TV", "MWEB"):
             try:
                 yt = YouTube(url, client=client)
                 title = yt.title or "Untitled video"
@@ -206,53 +174,13 @@ class VideoDownloader:
                 uploader = yt.author or "Unknown creator"
                 vid_id = yt.video_id or "unknown"
 
-                video_stream = (
-                    yt.streams.filter(only_video=True, file_extension="mp4")
+                prog = (
+                    yt.streams.filter(progressive=True, file_extension="mp4")
                     .order_by("resolution")
                     .desc()
                     .first()
-                    or yt.streams.filter(only_video=True).order_by("resolution").desc().first()
+                    or yt.streams.filter(progressive=True).order_by("resolution").desc().first()
                 )
-                audio_stream = yt.streams.filter(only_audio=True).order_by("abr").desc().first()
-
-                # Attempt separate adaptive streams first
-                if video_stream and audio_stream:
-                    try:
-                        v_temp = destination / "temp_video.mp4"
-                        a_temp = destination / f"temp_audio.{audio_stream.subtype}"
-                        video_stream.download(output_path=str(destination), filename=v_temp.name)
-                        audio_stream.download(output_path=str(destination), filename=a_temp.name)
-
-                        merged_path = destination / "source.mkv"
-                        cmd = [
-                            "ffmpeg", "-y",
-                            "-i", str(v_temp),
-                            "-i", str(a_temp),
-                            "-c", "copy",
-                            "-shortest",
-                            str(merged_path),
-                        ]
-                        subprocess.run(cmd, check=True, capture_output=True)
-
-                        v_temp.unlink(missing_ok=True)
-                        a_temp.unlink(missing_ok=True)
-
-                        if duration <= 0:
-                            duration = self._probe_duration_safe(merged_path)
-
-                        return SourceVideo(
-                            path=merged_path,
-                            source_url=url,
-                            video_id=vid_id,
-                            title=title,
-                            uploader=uploader,
-                            duration_seconds=duration,
-                        )
-                    except Exception:
-                        pass
-
-                # If adaptive streams fail (e.g. SABR PoToken requirement), use progressive stream
-                prog = yt.streams.filter(progressive=True).order_by("resolution").desc().first()
                 if prog:
                     out_path = destination / f"source.{prog.subtype}"
                     prog.download(output_path=str(destination), filename=out_path.name)
@@ -280,87 +208,22 @@ class VideoDownloader:
             self.browser_profile,
             self.cookie_file,
         )
-        authenticated = "cookiefile" in options or "cookiesfrombrowser" in options
         try:
             info = self._extract_info(url, options)
         except yt_dlp.utils.DownloadError as exc:
             detail = str(exc)
-            if "sign in to confirm" in detail.casefold() or "bot" in detail.casefold():
-                # Cloud datacenter IPs are blocked by default web client or rejected cookies.
-                # 1. Try clean options without cookies (in case cookies are expired/flagged)
-                clean_options = dict(options)
-                clean_options.pop("cookiefile", None)
-                clean_options.pop("cookiesfrombrowser", None)
-                clean_options["format"] = "bestvideo+bestaudio/best"
-                clean_extractor_args: dict[str, Any] = {
-                    "youtube": {"player_client": ["android", "tv"]},
-                }
-                import socket
-                try:
-                    with socket.create_connection(("127.0.0.1", 4416), timeout=0.2):
-                        clean_extractor_args["youtubepot-bgutilhttp"] = {"base_url": "http://127.0.0.1:4416"}
-                except OSError:
-                    pass
-                clean_options["extractor_args"] = clean_extractor_args
-                try:
-                    info = self._extract_info(url, clean_options)
-                except Exception:
-                    # 2. Try pytubefix fallback with ANDROID/TV progressive extraction
-                    try:
-                        return self._download_pytubefix(url, destination)
-                    except Exception:
-                        raise DownloadError(
-                            f"YouTube download failed: {self._download_error_detail(detail)}"
-                        ) from exc
-            elif "live event will begin" in detail.casefold() or "premieres in" in detail.casefold():
+            if "live event will begin" in detail.casefold() or "premieres in" in detail.casefold():
                 raise DownloadError(f"Scheduled livestream/premiere cannot be downloaded: {detail}")
             elif "video is unavailable" in detail.casefold() or "this video is unavailable" in detail.casefold() or "private video" in detail.casefold():
                 raise DownloadError(f"Video is unavailable or private on YouTube: {detail}")
-            elif "requested format is not available" in detail.casefold() and authenticated:
-                # Account cookies can occasionally be assigned a YouTube client experiment that
-                # exposes only SABR/image formats. Retry the exact same bestvideo+bestaudio
-                # selector without authentication; this often restores normal public streams.
-                public_options = dict(options)
-                public_options.pop("cookiefile", None)
-                public_options.pop("cookiesfrombrowser", None)
-                try:
-                    info = self._extract_info(url, public_options)
-                except yt_dlp.utils.DownloadError as public_exc:
-                    # A public default client can expose a format URL that later returns 403
-                    # when YouTube requires a GVS Proof-of-Origin token. Force mweb/web_safari
-                    # so the installed WebPoClient provider is asked to mint that token.
-                    token_options = dict(public_options)
-                    token_options["extractor_args"] = {
-                        "youtube": {"player_client": ["mweb", "web_safari"]}
-                    }
-                    try:
-                        info = self._extract_info(url, token_options)
-                    except yt_dlp.utils.DownloadError as token_exc:
-                        # Fallback to pytubefix Android progressive stream
-                        try:
-                            return self._download_pytubefix(url, destination)
-                        except Exception:
-                            public_detail = self._download_error_detail(str(public_exc))
-                            token_detail = self._download_error_detail(str(token_exc))
-                            raise DownloadError(
-                                "YouTube exposed no separate bestvideo+bestaudio streams with the "
-                                "configured cookies, and both public retries failed. Confirm the WPC "
-                                "PO Token Provider is active and keep its temporary Chrome window "
-                                f"open. Default public retry: {public_detail}. "
-                                f"PO-token client retry: {token_detail}"
-                            ) from token_exc
-            elif "403" in detail.casefold() or "forbidden" in detail.casefold() or "unable to download video data" in detail.casefold():
-                # 403 Forbidden on CDN stream fragments -> Fallback to pytubefix
+            else:
+                # Fallback to pytubefix progressive download with mobile client (zero cookies)
                 try:
                     return self._download_pytubefix(url, destination)
                 except Exception:
                     raise DownloadError(
                         f"YouTube download failed: {self._download_error_detail(detail)}"
                     ) from exc
-            else:
-                raise DownloadError(
-                    f"YouTube download failed: {self._download_error_detail(detail)}"
-                ) from exc
         except Exception as exc:
             raise DownloadError(f"Unexpected downloader error: {exc}") from exc
 
