@@ -148,25 +148,32 @@ class AIPlanner:
         source: SourceVideo,
         max_clips: int,
     ) -> list[ShortPlan]:
-        full_transcript = await self._transcribe(audio_path)
+        full_transcript = ""
+        try:
+            full_transcript = await self._transcribe(audio_path)
+        except Exception as exc:
+            logger.warning("Audio transcription could not be completed (%s); using timeline highlight extraction.", exc)
+            full_transcript = ""
+
         possible_clips = max(1, int(source.duration_seconds // self.target_duration))
         target_clips = min(max_clips or 100, possible_clips)
-        budgets = list(
-            dict.fromkeys(
-                (
-                    self.max_transcript_chars,
-                    max(4_000, self.max_transcript_chars // 2),
-                    4_000,
-                )
-            )
-        )
-        last_size_error: _PromptTooLargeError | None = None
 
-        for budget in budgets:
+        # If transcript is empty or unavailable, fall back to smart timeline segment plans immediately
+        if not full_transcript.strip():
+            logger.info("Proceeding with timeline coverage plans for %s", source.title)
+            base_plans = full_coverage_plans(
+                source,
+                target_duration=self.target_duration,
+                max_clips=target_clips,
+            )
+            return await self._enrich_plans(base_plans, source, full_transcript)
+
+        budgets = [min(self.max_transcript_chars, 4_000), 2_500]
+        for budget in dict.fromkeys(budgets):
             transcript = compact_transcript(
                 full_transcript,
-                min(budget, self.max_transcript_chars),
-                candidate_blocks=max(12, target_clips),
+                budget,
+                candidate_blocks=min(8, max(4, target_clips * 2)),
             )
             prompt = f"""Source title: {source.title}
 Source creator/channel: {source.uploader}
@@ -189,7 +196,7 @@ Detailed platform metadata is generated separately after the highlights are sele
             try:
                 payload = await self._request_plan(
                     prompt,
-                    max_tokens=min(1_400, 350 + target_clips * 100),
+                    max_tokens=min(500, 200 + target_clips * 100),
                 )
                 base_plans = normalize_plans(
                     payload,
@@ -198,13 +205,26 @@ Detailed platform metadata is generated separately after the highlights are sele
                     target_clips,
                 )
                 return await self._enrich_plans(base_plans, source, full_transcript)
-            except _PromptTooLargeError as exc:
-                last_size_error = exc
+            except _PromptTooLargeError:
+                continue
+            except Exception as exc:
+                logger.warning(
+                    "Groq AI planning rate-limited or unavailable (%s); falling back to smart timeline segment plans.",
+                    exc,
+                )
+                base_plans = full_coverage_plans(
+                    source,
+                    target_duration=self.target_duration,
+                    max_clips=target_clips,
+                )
+                return await self._enrich_plans(base_plans, source, full_transcript)
 
-        raise AIError(
-            "Groq planning prompt is still too large for the model's token-per-minute limit. "
-            "Lower GROQ_MAX_TRANSCRIPT_CHARS and retry."
-        ) from last_size_error
+        base_plans = full_coverage_plans(
+            source,
+            target_duration=self.target_duration,
+            max_clips=target_clips,
+        )
+        return await self._enrich_plans(base_plans, source, full_transcript)
 
     async def _enrich_plans(
         self,
@@ -212,9 +232,10 @@ Detailed platform metadata is generated separately after the highlights are sele
         source: SourceVideo,
         full_transcript: str,
     ) -> list[ShortPlan]:
+        self._groq_metadata_rate_limited = False
         enriched: list[ShortPlan] = []
         for index, plan in enumerate(plans):
-            if index and self.metadata_delay_seconds:
+            if index and self.metadata_delay_seconds and not self._groq_metadata_rate_limited:
                 await asyncio.sleep(self.metadata_delay_seconds)
             enriched.append(
                 await self._enrich_plan(
@@ -243,15 +264,14 @@ Detailed platform metadata is generated separately after the highlights are sele
             offset = hashtag_offset % len(hashtag_pool)
             hashtag_pool = hashtag_pool[offset:] + hashtag_pool[:offset]
         hashtag_block = " ".join(hashtag_pool[:30])
-        # A short clip may not contain enough facts for thousands of unique characters.
-        # Prefer grounded, useful text over padding or hallucination while allowing rich output.
-        youtube_description_min = min(800, self.youtube_description_target_chars)
+        # A short clip should have concise, punchy metadata that fits platform recommendations
+        youtube_description_min = min(200, self.youtube_description_target_chars)
         instagram_body_target = max(
-            300,
-            self.instagram_caption_target_chars - len(hashtag_block) - 100,
+            150,
+            min(self.instagram_caption_target_chars, 400),
         )
-        instagram_body_min = min(500, instagram_body_target)
-        prompt = f"""Create accurate, detailed metadata for one short-form clip.
+        instagram_body_min = 50
+        prompt = f"""Create accurate, engaging metadata for one short-form clip.
 Source title: {source.title}
 Source creator/channel: {source.uploader}
 Clip start: {plan.start_seconds:.2f} seconds
@@ -265,12 +285,9 @@ Clip transcript:
 
 Return one JSON object with title, description, and instagram_caption strings.
 - title: engaging and accurate, under 90 characters, without #Shorts.
-- description: detailed and factual, between {youtube_description_min} and
-  {self.youtube_description_target_chars} characters when the source contains enough information.
-- instagram_caption: detailed and engaging, between {instagram_body_min} and
-  {instagram_body_target} characters when supported by the source, without hashtags.
-Hashtags and source credit are added by the application. Never invent facts not present in the
-transcript or source metadata. Prefer concise factual text over repetition or filler.
+- description: concise and factual summary under 400 characters.
+- instagram_caption: engaging hook and caption under 300 characters, without hashtags.
+Hashtags and source credit are added by the application.
 """
         metadata_system = (
             "You write platform metadata grounded only in supplied source material. "
@@ -279,32 +296,11 @@ transcript or source metadata. Prefer concise factual text over repetition or fi
         try:
             payload = await self._request_plan(
                 prompt,
-                max_tokens=650,
+                max_tokens=400,
                 system_prompt=metadata_system,
             )
-            description_length = len(str(payload.get("description") or ""))
-            caption_length = len(str(payload.get("instagram_caption") or ""))
-            if description_length < youtube_description_min or caption_length < instagram_body_min:
-                repair_prompt = f"""The previous metadata response was too short.
-
-{prompt}
-
-Previous response:
-{json.dumps(payload, ensure_ascii=False)}
-
-Rewrite it now. The description MUST contain at least {youtube_description_min} characters and the
-instagram_caption MUST contain at least {instagram_body_min} characters. Stay factual, avoid
-repetition, and return only the corrected JSON object.
-"""
-                try:
-                    payload = await self._request_plan(
-                        repair_prompt,
-                        max_tokens=750,
-                        system_prompt=metadata_system,
-                    )
-                except Exception:
-                    pass
         except Exception as exc:
+            self._groq_metadata_rate_limited = True
             logger.warning(
                 "Groq AI metadata generation rate-limited or failed (%s); using clean heuristic metadata.", exc
             )
@@ -351,21 +347,15 @@ repetition, and return only the corrected JSON object.
     async def _request_plan(
         self,
         prompt: str,
-        max_tokens: int = 650,
+        max_tokens: int = 500,
         system_prompt: str = _SYSTEM_PROMPT,
     ) -> dict[str, Any]:
         models = [self.model]
         if self.fallback_model and self.fallback_model not in models:
             models.append(self.fallback_model)
-        if not self.base_url:
-            for extra in ("openai/gpt-oss-20b", "openai/gpt-oss-120b", "allam-2-7b"):
-                if extra not in models:
-                    models.append(extra)
 
         last_rate_limit: RateLimitError | None = None
         token_budgets = [max_tokens]
-        if max_tokens < 4_000:
-            token_budgets.append(min(4_000, max_tokens + 1_400))
 
         for model in models:
             for token_budget in token_budgets:
@@ -385,17 +375,10 @@ repetition, and return only the corrected JSON object.
                     return _parse_json_object(content)
                 except RateLimitError as exc:
                     last_rate_limit = exc
-                    logger.warning("Groq model %s rate limited (%s); trying fallback models.", model, exc)
+                    logger.warning("Groq model %s rate limited (%s); trying next.", model, exc)
                     break
                 except APIStatusError as exc:
                     detail = str(exc).lower()
-                    truncated_json = (
-                        exc.status_code == 400
-                        and "json_validate_failed" in detail
-                        and "max completion tokens" in detail
-                    )
-                    if truncated_json and token_budget != token_budgets[-1]:
-                        continue
                     if (
                         exc.status_code == 400
                         and "json_validate_failed" in detail
@@ -419,7 +402,7 @@ repetition, and return only the corrected JSON object.
                     if exc.status_code == 413:
                         raise _PromptTooLargeError(str(exc)) from exc
                     logger.warning(
-                        "Groq model %s returned status %s (%s); trying fallback models.",
+                        "Groq model %s returned status %s (%s); trying fallback.",
                         model,
                         exc.status_code,
                         exc,
@@ -427,14 +410,14 @@ repetition, and return only the corrected JSON object.
                     break
                 except (json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError) as exc:
                     logger.warning(
-                        "Groq model %s returned invalid editing plan (%s); trying fallback models.",
+                        "Groq model %s returned invalid editing plan (%s); trying fallback.",
                         model,
                         exc,
                     )
                     break
                 except Exception as exc:
                     logger.warning(
-                        "Groq model %s request failed (%s); trying fallback models.",
+                        "Groq model %s request failed (%s); trying fallback.",
                         model,
                         exc,
                     )
@@ -446,14 +429,17 @@ repetition, and return only the corrected JSON object.
 
     @staticmethod
     def _compress_audio(audio_path: Path) -> Path:
-        """Compress audio with ffmpeg down to 16kbps mono so it easily stays below Groq's 25MB limit."""
+        """Compress audio with ffmpeg down to 8kbps mono so it easily stays below Groq's 25MB limit."""
+        import shutil
         import subprocess
+        ffmpeg_bin = shutil.which("ffmpeg") or "ffmpeg"
         compressed = audio_path.with_name(f"compressed-{audio_path.name}")
         try:
             cmd = [
-                "ffmpeg", "-y", "-i", str(audio_path),
+                ffmpeg_bin, "-y", "-i", str(audio_path),
                 "-vn", "-ac", "1", "-ar", "16000",
-                "-c:a", "libmp3lame", "-b:a", "16k",
+                "-c:a", "libmp3lame", "-b:a", "8k",
+                "-t", "5400",
                 str(compressed),
             ]
             res = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -465,7 +451,7 @@ repetition, and return only the corrected JSON object.
 
     async def _transcribe(self, audio_path: Path) -> str:
         # Pre-check file size: Groq has a 25MB hard limit
-        if audio_path.exists() and audio_path.stat().st_size > 22 * 1024 * 1024:
+        if audio_path.exists() and audio_path.stat().st_size > 20 * 1024 * 1024:
             audio_path = self._compress_audio(audio_path)
 
         result = None
@@ -479,8 +465,8 @@ repetition, and return only the corrected JSON object.
                     temperature=0.0,
                 )
         except Exception as first_exc:
-            if "413" in str(first_exc) or "too_large" in str(first_exc).lower():
-                # Compress and retry if file size error occurs
+            logger.warning("Groq Whisper initial transcription attempt: %s; trying compressed fallback.", first_exc)
+            if "413" in str(first_exc) or "too_large" in str(first_exc).lower() or audio_path.stat().st_size > 20 * 1024 * 1024:
                 audio_path = self._compress_audio(audio_path)
             # Fall back to segment-only if word granularity is unsupported
             try:
@@ -493,7 +479,8 @@ repetition, and return only the corrected JSON object.
                         temperature=0.0,
                     )
             except Exception as exc:
-                raise AIError(f"Audio transcription failed: {exc}") from exc
+                logger.warning("Groq Whisper transcription failed (%s); proceeding with empty transcript for timeline fallback.", exc)
+                return ""
 
         # Cache raw transcription data for ASS captions
         try:
@@ -522,8 +509,6 @@ repetition, and return only the corrected JSON object.
             text = str(_field(result, "text", "") or "").strip()
             if text:
                 lines.append(f"[0.00] {text}")
-        if not lines:
-            raise AIError("No speech could be transcribed from this video.")
         return "\n".join(lines)
 
 

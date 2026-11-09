@@ -286,7 +286,11 @@ class WorkflowPipeline:
                         source.path,
                         audio_path,
                     )
-                full_transcript = await self.services.planner.transcribe(audio_path)
+                try:
+                    full_transcript = await self.services.planner.transcribe(audio_path)
+                except Exception as exc:
+                    logger.warning("Transcription for metadata enrichment skipped (%s); proceeding with clean heuristic metadata.", exc)
+                    full_transcript = ""
 
             uploaded_platforms = self._configured_platforms()
             blocked_platforms: dict[str, str] = {
@@ -407,9 +411,16 @@ class WorkflowPipeline:
             )
             await self._notify(completed, completed.progress_message)
 
-            # Clean up all local job files (raw downloads, audio, rendered clips, thumbnails)
-            # immediately so disk space is freed and never accumulates on disk.
+            # Clean up heavy raw download and audio files immediately so disk space is freed.
+            # Rendered clips remain on disk if any enabled platform upload is deferred/pending,
+            # and are deleted automatically once published everywhere.
             if not self.settings.keep_work_files:
+                if source.path.exists():
+                    source.path.unlink(missing_ok=True)
+                if audio_path.exists():
+                    audio_path.unlink(missing_ok=True)
+
+            if not pending_platforms and not self.settings.keep_work_files:
                 shutil.rmtree(job_dir, ignore_errors=True)
                 for clip in clips:
                     self.repository.update_clip(

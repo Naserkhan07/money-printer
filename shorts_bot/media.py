@@ -52,7 +52,7 @@ class MediaProcessor:
 
     def extract_audio(self, source: Path, output: Path) -> Path:
         output.parent.mkdir(parents=True, exist_ok=True)
-        # Use 16k mono mp3 to guarantee audio stays well below Groq Whisper's 25MB limit
+        # Extract mono 16k mp3 up to max 90 minutes (5400s) to strictly ensure file stays < 20MB
         self._run(
             [
                 self.ffmpeg,
@@ -68,10 +68,41 @@ class MediaProcessor:
                 "libmp3lame",
                 "-b:a",
                 "16k",
+                "-t",
+                "5400",
                 str(output),
             ],
             timeout=1800,
         )
+        # If output still exceeds 20MB, compress down to 8kbps mono
+        if output.exists() and output.stat().st_size > 20 * 1024 * 1024:
+            temp_output = output.with_name(f"compact-{output.name}")
+            try:
+                self._run(
+                    [
+                        self.ffmpeg,
+                        "-y",
+                        "-i",
+                        str(output),
+                        "-vn",
+                        "-ac",
+                        "1",
+                        "-ar",
+                        "16000",
+                        "-c:a",
+                        "libmp3lame",
+                        "-b:a",
+                        "8k",
+                        "-t",
+                        "5400",
+                        str(temp_output),
+                    ],
+                    timeout=600,
+                )
+                if temp_output.exists() and temp_output.stat().st_size < output.stat().st_size:
+                    temp_output.replace(output)
+            except Exception as exc:
+                logger.warning("Secondary audio compression failed: %s", exc)
         return output
 
     def render_short(
