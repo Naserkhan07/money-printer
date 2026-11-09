@@ -46,9 +46,9 @@ if __name__ == "__main__":
         print(f"Exported HTML dashboard to {out_path}")
         sys.exit(0)
 
-    port = 5050
+    port = int(os.environ.get("PORT", 5050))
     print("=" * 60)
-    print(f"🚀 AUTO-POSTER Live Dashboard is launching on http://localhost:{port}")
+    print(f"🚀 AUTO-POSTER Live Dashboard is launching on http://0.0.0.0:{port}")
     print("Auto-refreshes every 10 seconds with live schedule & uploaded links.")
     print("=" * 60)
     try:

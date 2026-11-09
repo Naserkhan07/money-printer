@@ -208,7 +208,50 @@ Overall Status: HEALTHY
 
 ---
 
-## 🎮 Launching the Bot
+## 🚀 Deploying to Render (24/7 Cloud Automation)
+
+You can deploy Money Printer directly to [Render](https://render.com) to run 24/7 in the cloud without keeping your local computer powered on.
+
+<p align="center">
+  <a href="https://render.com/deploy">
+    <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" />
+  </a>
+</p>
+
+### Option A: 1-Click Blueprint Deploy (Recommended)
+1. Fork or push this repository to your GitHub account: `https://github.com/Naserkhan07/money-printer.git`.
+2. Go to the [Render Dashboard](https://dashboard.render.com/) and click **New + > Blueprint**.
+3. Connect your repository. Render will automatically detect [`render.yaml`](render.yaml).
+4. Fill in your environment variables when prompted:
+   - `GROQ_API_KEY`: Your Groq API key.
+   - `INSTAGRAM_ACCESS_TOKEN`: Your Meta Graph API user token.
+   - `FACEBOOK_ACCESS_TOKEN`: Your Facebook Page access token.
+   - `YOUTUBE_TOKEN_CONTENT`: Copy-paste the raw JSON text from your local `youtube_token.json`.
+   - `CLIENT_SECRET_CONTENT`: Copy-paste the raw JSON text from your local `client_secret.json`.
+   - `YOUTUBE_COOKIES_CONTENT`: (Optional) Copy-paste the contents of `youtube-cookies.txt`.
+5. Click **Apply**. Render will automatically build the Docker container (with FFmpeg, Node.js, and subtitle fonts) and launch the service!
+
+### Option B: Manual Web Service Deploy (Docker)
+1. Go to [Render Dashboard](https://dashboard.render.com/) -> **New + > Web Service**.
+2. Connect `https://github.com/Naserkhan07/money-printer.git`.
+3. Configure the service:
+   - **Environment**: `Docker`
+   - **DockerfilePath**: `Dockerfile`
+   - **Instance Type**: `Starter` ($7/mo recommended for continuous video encoding; or `Free`)
+   - **Health Check Path**: `/`
+4. In **Environment Variables**, add the keys from [`.env.example`](.env.example).
+5. Click **Create Web Service**.
+
+### 🔄 Automatic GitHub Deployments
+Every time you push code changes to `main`, GitHub Actions can automatically notify Render to build and redeploy:
+1. In your Render Service settings, copy the **Deploy Hook** URL (`https://api.render.com/deploy/srv-xxxx?key=yyyy`).
+2. In your GitHub repository, go to **Settings > Secrets and variables > Actions > New repository secret**.
+3. Name: `RENDER_DEPLOY_HOOK_URL`, Value: Paste your Deploy Hook URL.
+4. Now, every `git push origin main` triggers an instant rebuild and deploy automatically!
+
+---
+
+## 🎮 Launching Locally
 
 ### Option 1: One-Click Startup (Recommended)
 Double-click [`start.bat`](file:///c:/Users/Naveed/Documents/money%20printer/start.bat). It automatically starts:
@@ -251,7 +294,9 @@ money-printer/
 │   ├── scheduler.py            # Multi-slot audience timetable scheduler
 │   ├── spool.py                # Local queue/ dropzone watcher
 │   └── youtube.py              # YouTube Data API v3 publisher
+├── .dockerignore               # Docker build exclusions
 ├── .env.example                # Safe environment variable template
+├── Dockerfile                  # Container definition for Render (FFmpeg, Node, Fonts)
 ├── channels.toml               # Creator channels list & scheduling settings
 ├── dashboard.py                # Dashboard runner
 ├── instagram_captions.txt      # Caption rotation lines
@@ -260,6 +305,10 @@ money-printer/
 ├── main.py                     # Main CLI entrypoint
 ├── preflight.bat               # Health check launcher
 ├── pyproject.toml              # Build & dependency metadata
+├── render-build.sh             # Native Python build script for Render
+├── render.yaml                 # Render Blueprint specification
+├── requirements.txt            # Production Python package dependencies
+├── run_render.py               # Unified cloud supervisor (Dashboard + Worker)
 ├── start.bat                   # One-click dual launcher
 ├── start_dashboard.bat         # Dashboard batch launcher
 └── start_worker.bat            # Worker batch launcher
