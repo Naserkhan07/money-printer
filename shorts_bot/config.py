@@ -202,7 +202,12 @@ class Settings:
                             "handle": str(ch.get("handle", "")).strip(),
                         }
                     )
-        is_ci = os.getenv("CI", "").strip().lower() in ("true", "1") or os.getenv("GITHUB_ACTIONS", "").strip().lower() in ("true", "1")
+        is_ci = (
+            os.getenv("CI", "").strip().lower() in ("true", "1")
+            or os.getenv("GITHUB_ACTIONS", "").strip().lower() in ("true", "1")
+            or bool(os.getenv("RAILWAY_ENVIRONMENT"))
+            or bool(os.getenv("RENDER"))
+        )
         legacy_auto_upload = _bool_env("AUTO_UPLOAD", True if is_ci else False)
 
         # Self-materialize OAuth token & client secret from environment variables if missing

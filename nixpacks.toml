@@ -4,3 +4,4 @@ nixPkgs = ["ffmpeg", "nodejs"]
 
 [start]
 cmd = "python main.py"
+
