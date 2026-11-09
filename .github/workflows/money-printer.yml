@@ -68,6 +68,7 @@ jobs:
       FREE_LLM_API_KEY: ${{ secrets.FREE_LLM_API_KEY || '' }}
       YOUTUBE_TOKEN_CONTENT: ${{ secrets.YOUTUBE_TOKEN_JSON }}
       CLIENT_SECRET_CONTENT: ${{ secrets.CLIENT_SECRET_JSON }}
+      YOUTUBE_COOKIES_CONTENT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
       INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
       INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID || '17841432791787477' }}
       FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID || '1231108530089378' }}
@@ -131,6 +132,18 @@ jobs:
             echo "✅ Materialized client_secret.json"
           else
             echo "::warning ::CLIENT_SECRET_JSON secret is empty in GitHub Secrets!"
+          fi
+
+          if [ -n "$YOUTUBE_COOKIES_CONTENT" ]; then
+            if echo "$YOUTUBE_COOKIES_CONTENT" | base64 -d > youtube-cookies.txt 2>/dev/null && [ -s youtube-cookies.txt ] && grep -qi "youtube" youtube-cookies.txt; then
+              echo "✅ Decoded valid Base64 cookies into youtube-cookies.txt"
+            else
+              printf "%s\n" "$YOUTUBE_COOKIES_CONTENT" > youtube-cookies.txt
+              echo "✅ Materialized raw cookies into youtube-cookies.txt"
+            fi
+            echo "YTDLP_COOKIE_FILE=youtube-cookies.txt" >> $GITHUB_ENV
+          else
+            echo "ℹ️ No YOUTUBE_COOKIES_TXT secret provided; using zero-cookie mobile client."
           fi
 
 

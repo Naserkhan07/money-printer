@@ -86,8 +86,8 @@ class VideoDownloader:
         js_runtimes["deno"] = {}
 
         options: dict[str, object] = {
-            # Prefer 1080p max, fall back to best progressive stream if adaptive streams are restricted
-            "format": "bestvideo*[height<=1080]+bestaudio/best[height<=1080]/best",
+            # Prefer 1080p max, fall back to progressive stream (e.g. 18) when adaptive streams are restricted
+            "format": "bestvideo*[height<=1080]+bestaudio/best[height<=1080]/best/18/best",
             "outtmpl": output_template,
             "merge_output_format": "mkv",
             "noplaylist": True,
@@ -103,10 +103,10 @@ class VideoDownloader:
             "socket_timeout": 30,
             "http_chunk_size": 10 * 1024 * 1024,
             "concurrent_fragment_downloads": 8,
-            # Bypass web botguard challenges completely by skipping webpage HTML and using mobile/TV clients (100% cookie-free)
+            # Bypass web botguard challenges completely by skipping webpage HTML and using mobile clients
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "tv"],
+                    "player_client": ["ios", "tv", "mweb", "web"] if cookie_file else ["android", "ios"],
                     "player_skip": ["webpage", "configs"],
                 }
             },
@@ -210,11 +210,16 @@ class VideoDownloader:
         destination.mkdir(parents=True, exist_ok=True)
         output_template = str(destination / "source.%(ext)s")
 
-        # 1. Primary attempt: pure mobile / TV client (zero cookies, zero browser interference)
-        clean_options = self._download_options(output_template)
+        # 1. Primary attempt: use configured options (with cookies if provided, else mobile client)
+        options = self._download_options(
+            output_template,
+            self.cookies_from_browser,
+            self.browser_profile,
+            self.cookie_file,
+        )
         info: dict[str, object] | None = None
         try:
-            info = self._extract_info(url, clean_options)
+            info = self._extract_info(url, options)
         except yt_dlp.utils.DownloadError as exc:
             detail = str(exc)
             if "live event will begin" in detail.casefold() or "premieres in" in detail.casefold():
@@ -222,16 +227,12 @@ class VideoDownloader:
             elif "video is unavailable" in detail.casefold() or "this video is unavailable" in detail.casefold() or "private video" in detail.casefold():
                 raise DownloadError(f"Video is unavailable or private on YouTube: {detail}")
 
-            # 2. Secondary attempt: try with cookie file if provided
-            if (self.cookie_file and Path(self.cookie_file).exists()) or self.cookies_from_browser:
+            # 2. Secondary attempt: try clean mobile client without cookies
+            if self.cookie_file or self.cookies_from_browser:
                 try:
-                    cookie_options = self._download_options(
-                        output_template,
-                        self.cookies_from_browser,
-                        self.browser_profile,
-                        self.cookie_file,
-                    )
-                    info = self._extract_info(url, cookie_options)
+                    logger.info("Attempting fallback with cookie-free mobile client for %s", url)
+                    clean_options = self._download_options(output_template)
+                    info = self._extract_info(url, clean_options)
                 except Exception:
                     info = None
 
