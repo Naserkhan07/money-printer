@@ -40,6 +40,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
+    env:
+      RIGHTS_ACKNOWLEDGED: 'true'
+      UPLOAD_YOUTUBE: 'true'
+      UPLOAD_INSTAGRAM: 'true'
+      UPLOAD_FACEBOOK: 'true'
+      MIN_UPLOADS_PER_SLOT: '3'
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      FREE_LLM_BASE_URL: ${{ secrets.FREE_LLM_BASE_URL || 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1' }}
+      FREE_LLM_MODEL: ${{ secrets.FREE_LLM_MODEL || 'Meta-Llama-3_3-70B-Instruct' }}
+      FREE_LLM_API_KEY: ${{ secrets.FREE_LLM_API_KEY || '' }}
+      YOUTUBE_TOKEN_CONTENT: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+      CLIENT_SECRET_CONTENT: ${{ secrets.CLIENT_SECRET_JSON }}
+      YOUTUBE_COOKIES_CONTENT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
+      INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+      INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID || '17841432791787477' }}
+      FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID || '1231108530089378' }}
+      FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
+      CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'Root' }}
+      CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || '576862343758742' }}
+      CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || '0BjwQ0SKiNmG__XaV_pYgWWlrbM' }}
+
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
@@ -80,9 +101,28 @@ jobs:
           restore-keys: |
             jobs-db-
 
-      - name: 📁 Prepare Directories
+      - name: 📁 Prepare Directories & Credentials
         run: |
           mkdir -p work queue assets/gameplay/gta5 assets/gameplay/minecraft assets/gameplay/subway_surfers
+          if [ -n "$YOUTUBE_TOKEN_CONTENT" ]; then
+            echo "$YOUTUBE_TOKEN_CONTENT" > youtube_token.json
+            echo "✅ Materialized youtube_token.json"
+          else
+            echo "::warning ::YOUTUBE_TOKEN_JSON secret is empty in GitHub Secrets!"
+          fi
+
+          if [ -n "$CLIENT_SECRET_CONTENT" ]; then
+            echo "$CLIENT_SECRET_CONTENT" > client_secret.json
+            echo "✅ Materialized client_secret.json"
+          else
+            echo "::warning ::CLIENT_SECRET_JSON secret is empty in GitHub Secrets!"
+          fi
+
+          if [ -n "$YOUTUBE_COOKIES_CONTENT" ]; then
+            echo "$YOUTUBE_COOKIES_CONTENT" > youtube-cookies.txt
+            echo "YTDLP_COOKIE_FILE=youtube-cookies.txt" >> $GITHUB_ENV
+            echo "✅ Materialized youtube-cookies.txt"
+          fi
 
       - name: 🔗 Queue Manual Input URL (if provided)
         if: ${{ inputs.youtube_url != '' }}
@@ -91,44 +131,11 @@ jobs:
           echo -e "\n${{ inputs.youtube_url }}" >> links.txt
 
       - name: 🚀 Run Health & Diagnostic Preflight
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          FREE_LLM_BASE_URL: ${{ secrets.FREE_LLM_BASE_URL || 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1' }}
-          FREE_LLM_MODEL: ${{ secrets.FREE_LLM_MODEL || 'Meta-Llama-3_3-70B-Instruct' }}
-          FREE_LLM_API_KEY: ${{ secrets.FREE_LLM_API_KEY || '' }}
-          YOUTUBE_TOKEN_CONTENT: ${{ secrets.YOUTUBE_TOKEN_JSON }}
-          CLIENT_SECRET_CONTENT: ${{ secrets.CLIENT_SECRET_JSON }}
-          YOUTUBE_COOKIES_CONTENT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
-          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
-          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID || '17841432791787477' }}
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID || '1231108530089378' }}
-          FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
-          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'Root' }}
-          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || '576862343758742' }}
-          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || '0BjwQ0SKiNmG__XaV_pYgWWlrbM' }}
         run: |
           python -m shorts_bot.preflight
 
       - name: ⚡ Execute Autonomous Pipeline
         env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          FREE_LLM_BASE_URL: ${{ secrets.FREE_LLM_BASE_URL || 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1' }}
-          FREE_LLM_MODEL: ${{ secrets.FREE_LLM_MODEL || 'Meta-Llama-3_3-70B-Instruct' }}
-          FREE_LLM_API_KEY: ${{ secrets.FREE_LLM_API_KEY || '' }}
-          MIN_UPLOADS_PER_SLOT: 3
-          UPLOAD_YOUTUBE: true
-          UPLOAD_INSTAGRAM: true
-          UPLOAD_FACEBOOK: true
-          YOUTUBE_TOKEN_CONTENT: ${{ secrets.YOUTUBE_TOKEN_JSON }}
-          CLIENT_SECRET_CONTENT: ${{ secrets.CLIENT_SECRET_JSON }}
-          YOUTUBE_COOKIES_CONTENT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
-          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
-          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID || '17841432791787477' }}
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID || '1231108530089378' }}
-          FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
-          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'Root' }}
-          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || '576862343758742' }}
-          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || '0BjwQ0SKiNmG__XaV_pYgWWlrbM' }}
           SCHEDULER_ENABLED: ${{ inputs.force_upload == true && 'false' || 'true' }}
         run: |
           if [ "${{ inputs.mode }}" = "continuous_50min" ]; then
@@ -158,3 +165,4 @@ jobs:
             git pull --rebase origin main || true
             git push origin main
           fi
+

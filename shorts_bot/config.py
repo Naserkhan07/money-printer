@@ -202,7 +202,8 @@ class Settings:
                             "handle": str(ch.get("handle", "")).strip(),
                         }
                     )
-        legacy_auto_upload = _bool_env("AUTO_UPLOAD", False)
+        is_ci = os.getenv("CI", "").strip().lower() in ("true", "1") or os.getenv("GITHUB_ACTIONS", "").strip().lower() in ("true", "1")
+        legacy_auto_upload = _bool_env("AUTO_UPLOAD", True if is_ci else False)
 
         # Self-materialize OAuth token & client secret from environment variables if missing
         yt_token_file = Path(os.getenv("YOUTUBE_TOKEN_FILE", "youtube_token.json")).expanduser()
@@ -255,7 +256,7 @@ class Settings:
                 os.getenv("YOUTUBE_TOKEN_FILE", "youtube_token.json")
             ).expanduser(),
             youtube_privacy_status=os.getenv("YOUTUBE_PRIVACY_STATUS", "public").strip().lower(),
-            upload_youtube=_bool_env("UPLOAD_YOUTUBE", legacy_auto_upload),
+            upload_youtube=_bool_env("UPLOAD_YOUTUBE", True if is_ci else legacy_auto_upload),
             instagram_user_id=(
                 os.getenv("INSTAGRAM_USER_ID", "").strip()
                 or _nested_string(channel_config, "instagram", "user_id")
@@ -272,7 +273,7 @@ class Settings:
             instagram_caption_rotation_file=Path(
                 os.getenv("INSTAGRAM_CAPTION_ROTATION_FILE", "instagram_captions.txt")
             ).expanduser(),
-            upload_instagram=_bool_env("UPLOAD_INSTAGRAM", False),
+            upload_instagram=_bool_env("UPLOAD_INSTAGRAM", True if is_ci else False),
             facebook_page_id=(
                 os.getenv("FACEBOOK_PAGE_ID", "").strip()
                 or _nested_string(channel_config, "facebook", "page_id")
@@ -324,7 +325,7 @@ class Settings:
             database_path=database_path,
             keep_work_files=_bool_env("KEEP_WORK_FILES", True),
             delete_uploaded_clips=_bool_env("DELETE_UPLOADED_CLIPS", True),
-            rights_acknowledged=_bool_env("RIGHTS_ACKNOWLEDGED", False),
+            rights_acknowledged=_bool_env("RIGHTS_ACKNOWLEDGED", True if is_ci else False),
             links_file=Path(os.getenv("LINKS_FILE", "links.txt")).expanduser(),
             downloaded_links_log=Path(
                 os.getenv("DOWNLOADED_LINKS_LOG", str(work_dir / "downloaded-links.log"))
