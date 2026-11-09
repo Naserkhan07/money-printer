@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080C15" />
+      <stop offset="50%" stop-color="#0D1527" />
+      <stop offset="100%" stop-color="#050811" />
+    </linearGradient>
+
+    <!-- Glowing Accent Gradients -->
+    <linearGradient id="primaryGold" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFDF00" />
+      <stop offset="50%" stop-color="#FFA500" />
+      <stop offset="100%" stop-color="#FF5E36" />
+    </linearGradient>
+
+    <linearGradient id="cyanPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F2FE" />
+      <stop offset="100%" stop-color="#4FACFE" />
+    </linearGradient>
+
+    <linearGradient id="cardBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B" stop-opacity="0.7" />
+      <stop offset="100%" stop-color="#0F172A" stop-opacity="0.85" />
+    </linearGradient>
+
+    <!-- Glow filters -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="24" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-weight: 900; font-size: 56px; fill: url(#primaryGold); letter-spacing: -1px; }
+    .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-weight: 500; font-size: 20px; fill: #94A3B8; }
+    .badge-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700; font-size: 13px; fill: #F8FAFC; }
+    .card-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700; font-size: 16px; fill: #F8FAFC; }
+    .card-desc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 400; font-size: 13px; fill: #64748B; }
+  </style>
+
+  <!-- Background Base -->
+  <rect width="1200" height="380" rx="16" fill="url(#bgGradient)" />
+
+  <!-- Ambient Glow Blobs -->
+  <circle cx="180" cy="80" r="140" fill="#FFB703" opacity="0.12" filter="url(#glow)" />
+  <circle cx="1020" cy="180" r="160" fill="#00F2FE" opacity="0.10" filter="url(#glow)" />
+  <circle cx="600" cy="340" r="120" fill="#8B5CF6" opacity="0.10" filter="url(#glow)" />
+
+  <!-- Subtle Border Overlay -->
+  <rect width="1200" height="380" rx="16" fill="none" stroke="#334155" stroke-width="1.5" opacity="0.6" />
+
+  <!-- Upper Pill Tag -->
+  <g transform="translate(60, 42)">
+    <rect width="230" height="30" rx="15" fill="#1E293B" stroke="#475569" stroke-width="1" />
+    <circle cx="16" cy="15" r="5" fill="#10B981" />
+    <text x="32" y="20" class="badge-text" fill="#10B981" font-size="12">AUTONOMOUS ENGINE v2.0</text>
+  </g>
+
+  <!-- Main Title -->
+  <text x="60" y="132" class="title">💸 MONEY PRINTER</text>
+  <text x="60" y="172" class="subtitle">Autonomous 60-Second Short &amp; Reel Producer • AI-Clipped • Split-Screen • Auto-Publishing</text>
+
+  <!-- Feature Cards Grid (Bottom) -->
+  <!-- Card 1: 18 Monitored Creators -->
+  <g transform="translate(60, 220)" filter="url(#cardShadow)">
+    <rect width="250" height="110" rx="12" fill="url(#cardBg)" stroke="#334155" stroke-width="1.2" />
+    <rect x="18" y="18" width="36" height="36" rx="8" fill="#EF4444" opacity="0.15" />
+    <text x="36" y="42" font-family="Arial" font-size="20" text-anchor="middle" fill="#EF4444">📺</text>
+    <text x="66" y="36" class="card-title">18 Creator Feeds</text>
+    <text x="66" y="52" class="card-desc">MrBeast, Speed, etc.</text>
+    <text x="20" y="90" class="card-desc" font-size="12">Real-time uploads &amp; RSS polling</text>
+  </g>
+
+  <!-- Card 2: Groq Whisper & LLM -->
+  <g transform="translate(335, 220)" filter="url(#cardShadow)">
+    <rect width="250" height="110" rx="12" fill="url(#cardBg)" stroke="#334155" stroke-width="1.2" />
+    <rect x="18" y="18" width="36" height="36" rx="8" fill="#F59E0B" opacity="0.15" />
+    <text x="36" y="42" font-family="Arial" font-size="20" text-anchor="middle" fill="#F59E0B">⚡</text>
+    <text x="66" y="36" class="card-title">Groq AI Pipeline</text>
+    <text x="66" y="52" class="card-desc">Whisper + Qwen 3.8</text>
+    <text x="20" y="90" class="card-desc" font-size="12">Timestamped viral segment scoring</text>
+  </g>
+
+  <!-- Card 3: FFmpeg Multi-Threaded Compositor -->
+  <g transform="translate(610, 220)" filter="url(#cardShadow)">
+    <rect width="250" height="110" rx="12" fill="url(#cardBg)" stroke="#334155" stroke-width="1.2" />
+    <rect x="18" y="18" width="36" height="36" rx="8" fill="#10B981" opacity="0.15" />
+    <text x="36" y="42" font-family="Arial" font-size="20" text-anchor="middle" fill="#10B981">🎮</text>
+    <text x="66" y="36" class="card-title">Split-Screen Compositor</text>
+    <text x="66" y="52" class="card-desc">1080×1920 60s Canvas</text>
+    <text x="20" y="90" class="card-desc" font-size="12">GTA 5, Minecraft &amp; Subway Surfers</text>
+  </g>
+
+  <!-- Card 4: Simultaneous Broadcasting -->
+  <g transform="translate(885, 220)" filter="url(#cardShadow)">
+    <rect width="250" height="110" rx="12" fill="url(#cardBg)" stroke="#334155" stroke-width="1.2" />
+    <rect x="18" y="18" width="36" height="36" rx="8" fill="#3B82F6" opacity="0.15" />
+    <text x="36" y="42" font-family="Arial" font-size="20" text-anchor="middle" fill="#3B82F6">🚀</text>
+    <text x="66" y="36" class="card-title">Triple Broadcast</text>
+    <text x="66" y="52" class="card-desc">Zero Disk Accumulation</text>
+    <text x="20" y="90" class="card-desc" font-size="12">YouTube, Instagram, Facebook</text>
+  </g>
+</svg>

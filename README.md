@@ -1,6 +1,10 @@
 # 💸 Money Printer — Autonomous Social Media Shorts & Reels Engine
 
 <p align="center">
+  <img src="assets/banner.svg" alt="Money Printer Banner" width="100%" />
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.12+" />
   <img src="https://img.shields.io/badge/FFmpeg-9.0+-007808?style=for-the-badge&logo=ffmpeg&logoColor=white" alt="FFmpeg" />
   <img src="https://img.shields.io/badge/Groq-Whisper_v3-F55036?style=for-the-badge&logo=fastapi&logoColor=white" alt="Groq Whisper" />
@@ -16,6 +20,10 @@
 ---
 
 ## 🎬 The Viral Split-Screen Format
+
+<p align="center">
+  <img src="assets/split_preview.svg" alt="Split-Screen Layout Format" width="380" />
+</p>
 
 The engine formats every clip into the industry-standard **9:16 vertical canvas (1080×1920)** with dynamic visual balance designed for peak audience retention:
 
