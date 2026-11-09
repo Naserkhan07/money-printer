@@ -1,0 +1,139 @@
+# Fill in the non-secret account IDs below.
+# Never put a YouTube, Google, Facebook, or Instagram password in this file.
+
+[youtube]
+# YouTube Studio -> Settings -> Channel -> Advanced settings
+channel_id = "UCnKgkuthG1nbaytUi4J_3zg"
+
+[instagram]
+# Numeric Instagram Professional Account ID from the Meta Graph API
+user_id = "17841432791787477"
+
+[facebook]
+# Numeric Facebook Page ID connected to the Instagram professional account
+page_id = "1231108530089378"
+
+# ----------------------------------------------------------------------
+# AI / LLM Configuration
+# Primary Engine: Official Groq API
+# ----------------------------------------------------------------------
+[ai]
+provider = "groq"
+model    = "qwen/qwen3.8-27b"
+
+# ----------------------------------------------------------------------
+# Optimal Audience Timing & Rate-Limit Scheduler
+# ----------------------------------------------------------------------
+[scheduler]
+enabled = true                  # Enforces optimal time slots and daily safety caps
+timezone = "Asia/Kolkata"       # All times are in IST (UTC+05:30)
+advance_prep_minutes = 60       # Wake up 60 min before slot to prepare/render video
+
+# Max uploads per day per platform — evenly spread across defined slots:
+#   YouTube  : 11-12 slots/day (morning / afternoon / evening)
+#   Instagram: 10 slots/day    (morning / evening)
+#   Facebook : 10 slots/day    (morning / evening)
+max_daily_youtube   = 10
+max_daily_instagram = 10
+max_daily_facebook  = 10
+
+# ----------------------------------------------------------------------
+# Hands-Free Channel Auto-Pilot
+# Automatically watches creator channels and queues new uploads into links.txt
+# ----------------------------------------------------------------------
+[autopilot]
+enabled = true
+poll_interval_minutes = 15      # Check every 15 minutes
+ignore_shorts = true            # Strictly filter out Shorts; only take full-length regular videos
+queue_latest_on_start = true    # Automatically queues latest videos on start, no manual links.txt entry needed!
+
+[[autopilot.channels]]
+name = "MrBeast"
+channel_id = "UCX6OQ3DkcsbYNE6H8uQQuVA"
+handle = "@MrBeast"
+
+[[autopilot.channels]]
+name = "Outdoor Boys"
+channel_id = "UCfpCQ89W9wjkHc8J_6eTbBg"
+handle = "@OutdoorBoys"
+
+[[autopilot.channels]]
+name = "Nick DiGiovanni"
+channel_id = "UCMyOj6fhvKFMjxUCp3b_3gA"
+handle = "@NickDiGiovanni"
+
+[[autopilot.channels]]
+name = "IShowSpeed"
+channel_id = "UCWsDFcIhY2DBi3GB5uykGXA"
+handle = "@IShowSpeed"
+
+[[autopilot.channels]]
+name = "BeastBoyShub"
+channel_id = "UCI86prlqXhbkREDMTaORvLQ"
+handle = "@BeastBoyShub"
+
+[[autopilot.channels]]
+name = "GothamChess"
+channel_id = "UCQHX6ViZmPsWiYSFAyS0a3Q"
+handle = "@GothamChess"
+
+[[autopilot.channels]]
+name = "Dream"
+channel_id = "UCTkXRDQl0luXxVQrRQvWS6w"
+handle = "@Dream"
+
+[[autopilot.channels]]
+name = "Not Your Type"
+channel_id = "UCKnNrlSJF_hWoBSz1lY_D7g"
+handle = "@notyourtype"
+
+[[autopilot.channels]]
+name = "HardToonz"
+channel_id = "UCIPqzmQYnE2HyZyLkoCJ3Iw"
+handle = "@HardToonz"
+
+[[autopilot.channels]]
+name = "Samay Raina"
+channel_id = "UCAov2BBv1ZJav0c_yHEciAw"
+handle = "@SamayRainaOfficial"
+
+[[autopilot.channels]]
+name = "CarryMinati"
+channel_id = "UCj22tfcQrWG7EMEKS0qLeEg"
+handle = "@CarryMinati"
+
+[[autopilot.channels]]
+name = "Warangal Diaries"
+channel_id = "UCWSyWK6oS5VL3RrJZuWsdSA"
+handle = "@WarangalDiaries"
+
+[[autopilot.channels]]
+name = "DiscoveryChannelInd"
+channel_id = "UCBLF5teKEUzTN5gZ2zgR0kQ"
+handle = "@discoverychannelind"
+
+[[autopilot.channels]]
+name = "Shakeel Bhai"
+channel_id = "UCAkMKodEd1z5lDo-e0MY5WA"
+handle = "@shakeelbhaiofficial"
+
+[[autopilot.channels]]
+name = "Grox"
+channel_id = "UCK5vUVoJsEVc7JeXQ8XiX7w"
+handle = "@groxmc"
+
+[[autopilot.channels]]
+name = "Wemmbu"
+channel_id = "UCkzzNLnuM-VsATWC53ehwOQ"
+handle = "@wemmbumc"
+
+[[autopilot.channels]]
+name = "FlameFrags"
+channel_id = "UCvYPobTo42NM36X7VC4dLhA"
+handle = "@flamefragsmc"
+
+[[autopilot.channels]]
+name = "Donut"
+channel_id = "UCL6JmiMXKoXS6bpP1D3bk8g"
+handle = "@donut"
+
