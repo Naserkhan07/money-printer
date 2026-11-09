@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from pathlib import Path
 from urllib.parse import urlparse
@@ -9,6 +10,8 @@ import yt_dlp
 
 from .errors import DownloadError
 from .models import SourceVideo
+
+logger = logging.getLogger(__name__)
 
 _URL_PATTERN = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 _ALLOWED_HOSTS = {
@@ -100,9 +103,12 @@ class VideoDownloader:
             "socket_timeout": 30,
             "http_chunk_size": 10 * 1024 * 1024,
             "concurrent_fragment_downloads": 8,
-            # Bypass web botguard challenges completely using mobile/TV clients (100% cookie-free)
+            # Bypass web botguard challenges completely by skipping webpage HTML and using mobile/TV clients (100% cookie-free)
             "extractor_args": {
-                "youtube": {"player_client": ["android", "tv"]}
+                "youtube": {
+                    "player_client": ["android", "tv"],
+                    "player_skip": ["webpage", "configs"],
+                }
             },
             # Current YouTube extraction requires a JS runtime for player challenges.
             "js_runtimes": js_runtimes,
@@ -194,7 +200,8 @@ class VideoDownloader:
                         uploader=uploader,
                         duration_seconds=duration,
                     )
-            except Exception:
+            except Exception as exc:
+                logger.warning("[pytubefix] client %s failed for %s: %s", client, url, exc)
                 continue
 
         raise DownloadError("YouTube download failed with both yt-dlp and pytubefix.")
