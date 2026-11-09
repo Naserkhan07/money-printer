@@ -1,37 +1,39 @@
 # Add one authorized YouTube video URL per line below.
 # A URL is removed atomically as soon as that video has downloaded successfully.
 # Downloaded URLs are recorded in work/downloaded-links.log.
+# [Autopilot: MrBeast] Beat Professional Athlete, Win $100,000
 # [Autopilot: Outdoor Boys] Building an Off Grid Forge on My Alaskan Homestead
-https://www.youtube.com/watch?v=ZRIBNLUXbZo
 # [Autopilot: Nick DiGiovanni] $1 vs $10,000 Mystery Box Challenge
-https://www.youtube.com/watch?v=9ZqdgmaO6gM
 # [Autopilot: IShowSpeed] The Video Ends When My Collection Is Worth $5,000!
-https://www.youtube.com/watch?v=cYJD2IhYp7k
 # [Autopilot: BeastBoyShub] SAY BYE TO THE FAT BOY | Dragons Dogma 2 - Part 4
-https://www.youtube.com/watch?v=-tC86ZY4PGY
 # [Autopilot: GothamChess] MAGNUS vs WITTYALIEN REMATCH
-https://www.youtube.com/watch?v=3cgLsxTsdxI
 # [Autopilot: Dream] Stripped Logs
-https://www.youtube.com/watch?v=iSwIiTNVvWo
 # [Autopilot: Not Your Type] Every Indian Street Food Ever !
-https://www.youtube.com/watch?v=7Wi38uVsW98
 # [Autopilot: HardToonz] Insane DIWALI Moments | HardToonz
-https://www.youtube.com/watch?v=f-FgXSCFKY0
 # [Autopilot: Samay Raina] INDIA’S GOT LATENT S2 EP8 ft. MC Stan, Tanmay Bhat, Madhur Virli, Arpit Bala
-https://www.youtube.com/watch?v=Z4aMdO8K0XE
 # [Autopilot: CarryMinati] PODCAST OF THE DECADE🥵| CARRYMINATI
-https://www.youtube.com/watch?v=tg2MwT5FPdY
 # [Autopilot: Warangal Diaries] Sardiyan Hogaye Shuru | Hyderabadi Comedy | Warangal Diaries
-https://www.youtube.com/watch?v=nZsz-1FWB2I
 # [Autopilot: DiscoveryChannelInd] Egypt's Lost Queens: The Search for Nefertiti and Cleopatra | Expedition Unknown S4 E8
-https://www.youtube.com/watch?v=6IkheEhxaDg
 # [Autopilot: Shakeel Bhai] GORDAN RAMSAY X SHAKEEL BHAI EP01
-https://www.youtube.com/watch?v=2fXOQK5LHwA
 # [Autopilot: Grox] 100 Villagers Vs. Gorilla
-https://www.youtube.com/watch?v=amnUt4pXin8
 # [Autopilot: Wemmbu] How I Saved the World's Largest Minecraft Server
-https://www.youtube.com/watch?v=5hG_nAYEC2g
 # [Autopilot: FlameFrags] 10,000 VS 10,000 Player Minecraft War
-https://www.youtube.com/watch?v=ZT-k42SC7L0
 # [Autopilot: Donut] We saved this junkyard bug and raced it 500 miles in the desert
+https://www.youtube.com/watch?v=_c2e1NcI3Sc
+https://www.youtube.com/watch?v=ZRIBNLUXbZo
+https://www.youtube.com/watch?v=9ZqdgmaO6gM
+https://www.youtube.com/watch?v=cYJD2IhYp7k
+https://www.youtube.com/watch?v=-tC86ZY4PGY
+https://www.youtube.com/watch?v=3cgLsxTsdxI
+https://www.youtube.com/watch?v=iSwIiTNVvWo
+https://www.youtube.com/watch?v=7Wi38uVsW98
+https://www.youtube.com/watch?v=f-FgXSCFKY0
+https://www.youtube.com/watch?v=Z4aMdO8K0XE
+https://www.youtube.com/watch?v=tg2MwT5FPdY
+https://www.youtube.com/watch?v=nZsz-1FWB2I
+https://www.youtube.com/watch?v=6IkheEhxaDg
+https://www.youtube.com/watch?v=2fXOQK5LHwA
+https://www.youtube.com/watch?v=amnUt4pXin8
+https://www.youtube.com/watch?v=5hG_nAYEC2g
+https://www.youtube.com/watch?v=ZT-k42SC7L0
 https://www.youtube.com/watch?v=vR-YEoHMB50
