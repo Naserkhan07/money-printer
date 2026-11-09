@@ -1,0 +1,6 @@
+# Nixpacks configuration for Railway deployment
+[phases.setup]
+nixPkgs = ["ffmpeg", "nodejs"]
+
+[start]
+cmd = "python main.py"
