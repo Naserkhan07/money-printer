@@ -1,0 +1,160 @@
+name: 💸 Money Printer — Autonomous Video Engine
+
+on:
+  schedule:
+    # Autonomous 24/7 run: Polls creator channels & publishes per scheduled slots every 30 minutes
+    - cron: '*/30 * * * *'
+  push:
+    paths:
+      - 'links.txt'
+  workflow_dispatch:
+    inputs:
+      youtube_url:
+        description: 'Optional: Direct YouTube URL to process immediately'
+        required: false
+        type: string
+      mode:
+        description: 'Execution mode'
+        required: true
+        default: 'once'
+        type: choice
+        options:
+          - once
+          - continuous_50min
+      force_upload:
+        description: 'Ignore scheduler window and post immediately'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: money-printer-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run-pipeline:
+    name: 🎬 Autopilot, Clip & Multi-Post
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: 🎥 Install FFmpeg, Node.js & Subtitle Fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-liberation fonts-dejavu-core fontconfig nodejs
+          fc-cache -f
+
+      - name: 📦 Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: 💾 Cache Gameplay Video Footage
+        uses: actions/cache@v4
+        with:
+          path: assets/gameplay
+          key: gameplay-footage-${{ hashFiles('assets/gameplay/README.md') }}
+          restore-keys: |
+            gameplay-footage-
+
+      - name: 💾 Restore Database Cache
+        uses: actions/cache@v4
+        with:
+          path: work/jobs.db
+          key: jobs-db-${{ github.run_id }}
+          restore-keys: |
+            jobs-db-
+
+      - name: 📁 Prepare Directories
+        run: |
+          mkdir -p work queue assets/gameplay/gta5 assets/gameplay/minecraft assets/gameplay/subway_surfers
+
+      - name: 🔗 Queue Manual Input URL (if provided)
+        if: ${{ inputs.youtube_url != '' }}
+        run: |
+          echo "Queueing direct URL: ${{ inputs.youtube_url }}"
+          echo -e "\n${{ inputs.youtube_url }}" >> links.txt
+
+      - name: 🚀 Run Health & Diagnostic Preflight
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          FREE_LLM_BASE_URL: ${{ secrets.FREE_LLM_BASE_URL || 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1' }}
+          FREE_LLM_MODEL: ${{ secrets.FREE_LLM_MODEL || 'Meta-Llama-3_3-70B-Instruct' }}
+          FREE_LLM_API_KEY: ${{ secrets.FREE_LLM_API_KEY || '' }}
+          YOUTUBE_TOKEN_CONTENT: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+          CLIENT_SECRET_CONTENT: ${{ secrets.CLIENT_SECRET_JSON }}
+          YOUTUBE_COOKIES_CONTENT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID || '17841432791787477' }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID || '1231108530089378' }}
+          FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'Root' }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || '576862343758742' }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || '0BjwQ0SKiNmG__XaV_pYgWWlrbM' }}
+        run: |
+          python -m shorts_bot.preflight
+
+      - name: ⚡ Execute Autonomous Pipeline
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          FREE_LLM_BASE_URL: ${{ secrets.FREE_LLM_BASE_URL || 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1' }}
+          FREE_LLM_MODEL: ${{ secrets.FREE_LLM_MODEL || 'Meta-Llama-3_3-70B-Instruct' }}
+          FREE_LLM_API_KEY: ${{ secrets.FREE_LLM_API_KEY || '' }}
+          MIN_UPLOADS_PER_SLOT: 3
+          UPLOAD_YOUTUBE: true
+          UPLOAD_INSTAGRAM: true
+          UPLOAD_FACEBOOK: true
+          YOUTUBE_TOKEN_CONTENT: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+          CLIENT_SECRET_CONTENT: ${{ secrets.CLIENT_SECRET_JSON }}
+          YOUTUBE_COOKIES_CONTENT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID || '17841432791787477' }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID || '1231108530089378' }}
+          FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'Root' }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || '576862343758742' }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || '0BjwQ0SKiNmG__XaV_pYgWWlrbM' }}
+          SCHEDULER_ENABLED: ${{ inputs.force_upload == true && 'false' || 'true' }}
+        run: |
+          if [ "${{ inputs.mode }}" = "continuous_50min" ]; then
+            echo "Running in continuous watching mode (up to 50 minutes)..."
+            timeout 3000s python main.py || true
+          else
+            echo "Running batch cycle (--once)..."
+            python -m shorts_bot.file_queue --once
+          fi
+
+      - name: 📊 Publish Markdown Mission Control Summary
+        if: always()
+        run: |
+          python dashboard.py --summary >> $GITHUB_STEP_SUMMARY || true
+
+      - name: 💾 Commit Updated Download Ledger & Queue
+        if: always()
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          touch work/downloaded-links.log
+          git add -f links.txt work/downloaded-links.log || true
+          if git diff --staged --quiet; then
+            echo "No queue changes to commit."
+          else
+            git commit -m "chore(autopilot): update links queue & download audit ledger [skip ci]"
+            git pull --rebase origin main || true
+            git push origin main
+          fi

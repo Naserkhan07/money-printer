@@ -208,74 +208,52 @@ Overall Status: HEALTHY
 
 ---
 
-## 🚀 Deploying to Render (24/7 Cloud Automation — Never Sleeps)
+## ⚡ Autonomous Cloud Automation via GitHub Actions
 
-You can deploy Money Printer directly as a **Standard Web Service** on [Render](https://render.com) to run 24/7 in the cloud without keeping your local computer powered on.
-
----
-
-### 🛡️ Why Render Free Tier Sleeps & How We Prevent It
-
-By default, Render's Free tier spins down web services after **15 minutes of inactivity**. 
-
-Money Printer includes a **3-Layer Anti-Sleep Defense System** so your pipeline and autopilot stay awake 24/7 forever without paying a dime:
-
-1. **Built-in Container Self-Pinger:** `run_render.py` detects `$RENDER_EXTERNAL_URL` and automatically sends an HTTP request to `/healthz` every **9 minutes**, continuously resetting Render's 15-minute inactivity timer from within the cloud!
-2. **Automated GitHub Actions Cron (`keep-alive.yml`):** GitHub Actions automatically pings your Render URL every **10 minutes** from GitHub's servers, guaranteeing the service stays active even if the container restarts.
-3. **UptimeRobot Support:** You can also point a free [UptimeRobot](https://uptimerobot.com/) monitor to `https://your-service.onrender.com/healthz` (5-minute interval).
+Money Printer can run **100% autonomously in the cloud via GitHub Actions** without needing external hosting, credit cards, or keeping your local computer powered on.
 
 ---
 
-### 📋 Step-by-Step Render Deployment (Standard Web Service)
+### 🌟 How the GitHub Actions Cloud Engine Works
 
-#### 1. Create a New Web Service on Render
-1. Go to your [Render Dashboard](https://dashboard.render.com/) and click **New + > Web Service**.
-2. Select **Build and deploy from a Git repository** and connect:
-   `https://github.com/Naserkhan07/money-printer.git`
-3. Configure the service settings:
-   - **Name**: `money-printer` (or your preferred name)
-   - **Language / Runtime**: `Docker`
-   - **Dockerfile Path**: `Dockerfile`
-   - **Instance Type**: `Free` (or `Starter` $7/mo for faster CPU video encoding)
-   - **Health Check Path**: `/healthz`
+- **24/7 Scheduled Execution:** Runs every **30 minutes** via GitHub Actions cron to monitor all 18 creator channels, pull regular long-form videos, extract top 3 viral highlights, and multi-post to YouTube, Instagram, and Facebook during scheduled audience windows.
+- **Instant On-Demand Processing (`workflow_dispatch`):** Go to the **Actions** tab $\rightarrow$ select **💸 Money Printer** $\rightarrow$ click **Run workflow**. You can optionally paste any YouTube link to process immediately!
+- **Push to Queue (`links.txt`):** If you commit or edit `links.txt` on GitHub, the workflow triggers instantly to process the new video.
+- **Rich Mission Control Run Summary:** Every workflow run prints the full Mission Control Markdown report with live pipeline stages, upload schedules, and published links right in the GitHub Actions summary tab!
+- **State Persistence:** Automatically commits updated download ledgers and caches `assets/gameplay` and `work/jobs.db` across runs so content is never repeated.
 
-#### 2. Set Environment Variables
-In the **Environment Variables** section, add your keys:
+---
 
-| Key | Value / Instructions |
+### 🔑 1-Minute Setup: Add GitHub Repository Secrets
+
+Go to your repository: [**Settings $\rightarrow$ Secrets and variables $\rightarrow$ Actions $\rightarrow$ New repository secret**](https://github.com/Naserkhan07/money-printer/settings/secrets/actions) and add:
+
+| Secret Name | Description / Value |
 | :--- | :--- |
 | `GROQ_API_KEY` | Your Groq API key (`gsk_...`) |
-| `FREE_LLM_BASE_URL` | `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1` |
-| `FREE_LLM_MODEL` | `Meta-Llama-3_3-70B-Instruct` |
-| `MIN_UPLOADS_PER_SLOT` | `3` |
-| `UPLOAD_YOUTUBE` | `true` |
-| `UPLOAD_INSTAGRAM` | `true` |
-| `UPLOAD_FACEBOOK` | `true` |
+| `YOUTUBE_TOKEN_JSON` | Raw JSON text from your local `youtube_token.json` |
+| `CLIENT_SECRET_JSON` | Raw JSON text from your local `client_secret.json` |
 | `INSTAGRAM_ACCESS_TOKEN` | Meta Graph API user token for `@splitzz.isodope` |
-| `INSTAGRAM_USER_ID` | `17841432791787477` |
-| `FACEBOOK_PAGE_ID` | `1231108530089378` |
 | `FACEBOOK_ACCESS_TOKEN` | Facebook Page access token for `Splitzz` |
-| `YOUTUBE_TOKEN_CONTENT` | Paste the exact JSON text from your local `youtube_token.json` file |
-| `CLIENT_SECRET_CONTENT` | Paste the exact JSON text from your local `client_secret.json` file |
-| `YOUTUBE_COOKIES_CONTENT` | *(Optional)* Paste your `youtube-cookies.txt` file |
-
-#### 3. Click "Deploy Web Service"
-- Render will automatically build the container (installing Debian, FFmpeg, Node.js, and font libraries).
-- It will bind the Live Mission Control Dashboard on `$PORT` and launch the 24/7 background worker.
+| `INSTAGRAM_USER_ID` | `17841432791787477` *(optional, has default)* |
+| `FACEBOOK_PAGE_ID` | `1231108530089378` *(optional, has default)* |
+| `FREE_LLM_BASE_URL` | `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1` *(optional, has default)* |
+| `FREE_LLM_MODEL` | `Meta-Llama-3_3-70B-Instruct` *(optional, has default)* |
+| `CLOUDINARY_CLOUD_NAME` | `Root` *(optional)* |
+| `CLOUDINARY_API_KEY` | `576862343758742` *(optional)* |
+| `CLOUDINARY_API_SECRET` | `0BjwQ0SKiNmG__XaV_pYgWWlrbM` *(optional)* |
 
 ---
 
-### 🔄 GitHub Actions Workflows
+### ⚙️ Enable Workflow Read & Write Permissions
 
-Two automated workflows are included in `.github/workflows/`:
+To allow the workflow to commit updated queue ledgers back to the repository:
+1. In your GitHub repo, go to **Settings** $\rightarrow$ **Actions** $\rightarrow$ **General**.
+2. Scroll to **Workflow permissions**.
+3. Select **Read and write permissions**.
+4. Click **Save**.
 
-1. **`render-deploy.yml` (Auto-Deploy on Push):**
-   - Automatically triggers Render to rebuild whenever you push new code to `main`.
-   - Setup: In GitHub Repo Settings $\rightarrow$ **Secrets and variables** $\rightarrow$ **Actions**, add `RENDER_DEPLOY_HOOK_URL` (copied from Render Service Settings $\rightarrow$ Deploy Hook).
-
-2. **`keep-alive.yml` (24/7 Anti-Sleep Pinger):**
-   - Runs every 10 minutes on GitHub Actions to ping your app's `/healthz` endpoint.
-   - Setup: In GitHub Repo Settings $\rightarrow$ **Secrets and variables** $\rightarrow$ **Actions**, add `RENDER_APP_URL` with your Render service URL (e.g. `https://money-printer.onrender.com`).
+That's it! Your autonomous Money Printer machine is active and running in GitHub Actions!
 
 ---
 
@@ -322,9 +300,9 @@ money-printer/
 │   ├── scheduler.py            # Multi-slot audience timetable scheduler
 │   ├── spool.py                # Local queue/ dropzone watcher
 │   └── youtube.py              # YouTube Data API v3 publisher
-├── .dockerignore               # Docker build exclusions
+├── .github/workflows/
+│   └── money-printer.yml       # Autonomous 24/7 GitHub Actions Cloud Workflow
 ├── .env.example                # Safe environment variable template
-├── Dockerfile                  # Container definition for Render (FFmpeg, Node, Fonts)
 ├── channels.toml               # Creator channels list & scheduling settings
 ├── dashboard.py                # Dashboard runner
 ├── instagram_captions.txt      # Caption rotation lines
@@ -333,10 +311,7 @@ money-printer/
 ├── main.py                     # Main CLI entrypoint
 ├── preflight.bat               # Health check launcher
 ├── pyproject.toml              # Build & dependency metadata
-├── render-build.sh             # Native Python build script for Render
-├── render.yaml                 # Render Blueprint specification
 ├── requirements.txt            # Production Python package dependencies
-├── run_render.py               # Unified cloud supervisor (Dashboard + Worker)
 ├── start.bat                   # One-click dual launcher
 ├── start_dashboard.bat         # Dashboard batch launcher
 └── start_worker.bat            # Worker batch launcher

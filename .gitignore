@@ -10,7 +10,6 @@ client_secret*.json
 youtube_token.json
 *token*.json
 information.txt
-render_env_keys.txt
 
 # ==============================================================================
 # RUNTIME WORKSPACE, LOGS & DATABASES

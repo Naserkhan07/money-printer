@@ -204,6 +204,30 @@ class Settings:
                     )
         legacy_auto_upload = _bool_env("AUTO_UPLOAD", False)
 
+        # Self-materialize OAuth token & client secret from environment variables if missing
+        yt_token_file = Path(os.getenv("YOUTUBE_TOKEN_FILE", "youtube_token.json")).expanduser()
+        if not (yt_token_file.is_file() and yt_token_file.stat().st_size > 0):
+            raw_token = os.getenv("YOUTUBE_TOKEN_CONTENT") or os.getenv("YOUTUBE_TOKEN_JSON") or os.getenv("YOUTUBE_TOKEN")
+            if raw_token and raw_token.strip():
+                yt_token_file.parent.mkdir(parents=True, exist_ok=True)
+                yt_token_file.write_text(raw_token.strip(), encoding="utf-8")
+
+        yt_secrets_file = Path(os.getenv("YOUTUBE_CLIENT_SECRETS_FILE", "client_secret.json")).expanduser()
+        if not (yt_secrets_file.is_file() and yt_secrets_file.stat().st_size > 0):
+            raw_secrets = os.getenv("CLIENT_SECRET_CONTENT") or os.getenv("CLIENT_SECRET_JSON") or os.getenv("CLIENT_SECRET")
+            if raw_secrets and raw_secrets.strip():
+                yt_secrets_file.parent.mkdir(parents=True, exist_ok=True)
+                yt_secrets_file.write_text(raw_secrets.strip(), encoding="utf-8")
+
+        cookie_file_str = os.getenv("YTDLP_COOKIE_FILE", "").strip()
+        if cookie_file_str:
+            c_path = Path(cookie_file_str).expanduser()
+            if not (c_path.is_file() and c_path.stat().st_size > 0):
+                raw_c = os.getenv("YOUTUBE_COOKIES_CONTENT") or os.getenv("YOUTUBE_COOKIES_TXT") or os.getenv("COOKIES_CONTENT")
+                if raw_c and raw_c.strip():
+                    c_path.parent.mkdir(parents=True, exist_ok=True)
+                    c_path.write_text(raw_c.strip(), encoding="utf-8")
+
         settings = cls(
             groq_api_key=os.getenv("GROQ_API_KEY", "").strip(),
             groq_model=_groq_model_env("GROQ_MODEL"),
