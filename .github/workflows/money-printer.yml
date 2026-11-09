@@ -68,7 +68,6 @@ jobs:
       FREE_LLM_API_KEY: ${{ secrets.FREE_LLM_API_KEY || '' }}
       YOUTUBE_TOKEN_CONTENT: ${{ secrets.YOUTUBE_TOKEN_JSON }}
       CLIENT_SECRET_CONTENT: ${{ secrets.CLIENT_SECRET_JSON }}
-      YOUTUBE_COOKIES_CONTENT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
       INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
       INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID || '17841432791787477' }}
       FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID || '1231108530089378' }}
@@ -134,11 +133,6 @@ jobs:
             echo "::warning ::CLIENT_SECRET_JSON secret is empty in GitHub Secrets!"
           fi
 
-          if [ -n "$YOUTUBE_COOKIES_CONTENT" ]; then
-            echo "$YOUTUBE_COOKIES_CONTENT" > youtube-cookies.txt
-            echo "YTDLP_COOKIE_FILE=youtube-cookies.txt" >> $GITHUB_ENV
-            echo "✅ Authenticated with youtube-cookies.txt"
-          fi
 
 
       - name: 🔗 Queue Manual Input URL (if provided)

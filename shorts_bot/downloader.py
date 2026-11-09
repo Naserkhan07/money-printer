@@ -102,7 +102,7 @@ class VideoDownloader:
             "concurrent_fragment_downloads": 8,
             # Bypass web botguard challenges completely using mobile/TV clients (100% cookie-free)
             "extractor_args": {
-                "youtube": {"player_client": ["android", "tv", "ios", "mweb"]}
+                "youtube": {"player_client": ["android", "tv"]}
             },
             # Current YouTube extraction requires a JS runtime for player challenges.
             "js_runtimes": js_runtimes,
@@ -202,22 +202,34 @@ class VideoDownloader:
     def _download_sync(self, url: str, destination: Path) -> SourceVideo:
         destination.mkdir(parents=True, exist_ok=True)
         output_template = str(destination / "source.%(ext)s")
-        options = self._download_options(
-            output_template,
-            self.cookies_from_browser,
-            self.browser_profile,
-            self.cookie_file,
-        )
+
+        # 1. Primary attempt: pure mobile / TV client (zero cookies, zero browser interference)
+        clean_options = self._download_options(output_template)
+        info: dict[str, object] | None = None
         try:
-            info = self._extract_info(url, options)
+            info = self._extract_info(url, clean_options)
         except yt_dlp.utils.DownloadError as exc:
             detail = str(exc)
             if "live event will begin" in detail.casefold() or "premieres in" in detail.casefold():
                 raise DownloadError(f"Scheduled livestream/premiere cannot be downloaded: {detail}")
             elif "video is unavailable" in detail.casefold() or "this video is unavailable" in detail.casefold() or "private video" in detail.casefold():
                 raise DownloadError(f"Video is unavailable or private on YouTube: {detail}")
-            else:
-                # Fallback to pytubefix progressive download with mobile client (zero cookies)
+
+            # 2. Secondary attempt: try with cookie file if provided
+            if (self.cookie_file and Path(self.cookie_file).exists()) or self.cookies_from_browser:
+                try:
+                    cookie_options = self._download_options(
+                        output_template,
+                        self.cookies_from_browser,
+                        self.browser_profile,
+                        self.cookie_file,
+                    )
+                    info = self._extract_info(url, cookie_options)
+                except Exception:
+                    info = None
+
+            # 3. Final fallback: pytubefix Android progressive stream
+            if not info:
                 try:
                     return self._download_pytubefix(url, destination)
                 except Exception:
