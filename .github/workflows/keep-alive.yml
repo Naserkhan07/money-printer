@@ -1,0 +1,31 @@
+name: Render 24/7 Keep-Alive
+
+on:
+  schedule:
+    # Runs every 10 minutes (Render free tier sleeps after 15 minutes of inactivity)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual one-click trigger from GitHub Actions
+
+jobs:
+  keep-alive:
+    name: Ping Render /healthz
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Service
+        env:
+          RENDER_APP_URL: ${{ secrets.RENDER_APP_URL }}
+        run: |
+          if [ -z "$RENDER_APP_URL" ]; then
+            echo "::warning ::RENDER_APP_URL secret is not configured yet. Add your Render URL to GitHub Secrets (e.g. https://money-printer.onrender.com) to enable scheduled keep-alive."
+            exit 0
+          fi
+          TARGET_URL="${RENDER_APP_URL%/}/healthz"
+          echo "Pinging ${TARGET_URL} to keep Render awake..."
+          HTTP_STATUS=$(curl -s -L -o response.json -w "%{http_code}" --max-time 30 "${TARGET_URL}")
+          echo "Response code: ${HTTP_STATUS}"
+          cat response.json || true
+          if [ "${HTTP_STATUS}" -ge 200 ] && [ "${HTTP_STATUS}" -lt 400 ]; then
+            echo "✅ Render service is awake and healthy! Inactivity sleep timer reset."
+          else
+            echo "⚠️ Unexpected HTTP status ${HTTP_STATUS}. Service may still be starting."
+          fi

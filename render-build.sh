@@ -24,3 +24,4 @@ echo "[Render Build] Preparing runtime directories..."
 mkdir -p work queue assets/gameplay/gta5 assets/gameplay/minecraft assets/gameplay/subway_surfers
 
 echo "[Render Build] Build completed successfully!"
+

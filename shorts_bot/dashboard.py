@@ -675,8 +675,22 @@ def render_html_dashboard(data: dict[str, Any]) -> str:
 
 class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
-        settings = Settings.from_env()
         parsed_path = urllib.parse.urlparse(self.path)
+
+        # 0. Dedicated lightweight keep-alive / healthcheck endpoint
+        if parsed_path.path in ("/healthz", "/ping", "/health"):
+            db_file = Path(os.environ.get("DATABASE_PATH", "work/jobs.db"))
+            payload = {
+                "status": "ok",
+                "service": "money-printer",
+                "timestamp": datetime.now().isoformat(),
+                "database": "connected" if db_file.exists() else "initializing",
+                "keep_alive": True,
+            }
+            self._send_json(payload, status=200)
+            return
+
+        settings = Settings.from_env()
 
         if parsed_path.path == "/api/data":
             data = get_dashboard_data(settings.database_path, settings)

@@ -117,6 +117,55 @@ def start_web_dashboard(port: int) -> None:
     t.start()
 
 
+def start_keep_alive_pinger() -> None:
+    """
+    Prevents Render from sleeping on the Free tier by regularly pinging /healthz.
+    Render automatically populates $RENDER_EXTERNAL_URL on web services.
+    """
+    import threading
+    import urllib.request
+
+    url = (
+        os.environ.get("RENDER_EXTERNAL_URL")
+        or os.environ.get("KEEP_ALIVE_URL")
+        or os.environ.get("RENDER_URL")
+        or ""
+    ).strip()
+
+    if not url:
+        logger.info(
+            "🛡️ Keep-Alive pinger: No RENDER_EXTERNAL_URL detected. "
+            "Render will supply this automatically when deployed as a Web Service."
+        )
+        return
+
+    target = f"{url.rstrip('/')}/healthz"
+    logger.info(
+        "🛡️ Keep-Alive pinger active! Pinging %s every 9 minutes to prevent Render from sleeping.",
+        target,
+    )
+
+    def _ping_loop() -> None:
+        time.sleep(60)
+        while True:
+            try:
+                req = urllib.request.Request(
+                    target,
+                    headers={"User-Agent": "MoneyPrinter-KeepAlive/1.0"},
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    if resp.status == 200:
+                        logger.info(
+                            "🛡️ Keep-Alive ping successful (HTTP 200) -> Render sleep timer reset!"
+                        )
+            except Exception as exc:
+                logger.debug("Keep-Alive ping notice: %s", exc)
+            time.sleep(540)  # Ping every 9 minutes (Render sleeps at 15m)
+
+    t = threading.Thread(target=_ping_loop, daemon=True, name="KeepAliveThread")
+    t.start()
+
+
 def main() -> None:
     setup_cloud_environment()
 
@@ -125,6 +174,9 @@ def main() -> None:
 
     # 1. Start the HTTP Dashboard so Render's health checks succeed immediately
     start_web_dashboard(port)
+
+    # 2. Start built-in keep-alive pinger so Render Free Tier never sleeps
+    start_keep_alive_pinger()
 
     # 2. Supervisor Loop for the Automation Worker
     worker_proc: subprocess.Popen[Any] | None = None

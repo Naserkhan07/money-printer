@@ -208,46 +208,74 @@ Overall Status: HEALTHY
 
 ---
 
-## 🚀 Deploying to Render (24/7 Cloud Automation)
+## 🚀 Deploying to Render (24/7 Cloud Automation — Never Sleeps)
 
-You can deploy Money Printer directly to [Render](https://render.com) to run 24/7 in the cloud without keeping your local computer powered on.
+You can deploy Money Printer directly as a **Standard Web Service** on [Render](https://render.com) to run 24/7 in the cloud without keeping your local computer powered on.
 
-<p align="center">
-  <a href="https://render.com/deploy">
-    <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" />
-  </a>
-</p>
+---
 
-### Option A: 1-Click Blueprint Deploy (Recommended)
-1. Fork or push this repository to your GitHub account: `https://github.com/Naserkhan07/money-printer.git`.
-2. Go to the [Render Dashboard](https://dashboard.render.com/) and click **New + > Blueprint**.
-3. Connect your repository. Render will automatically detect [`render.yaml`](render.yaml).
-4. Fill in your environment variables when prompted:
-   - `GROQ_API_KEY`: Your Groq API key.
-   - `INSTAGRAM_ACCESS_TOKEN`: Your Meta Graph API user token.
-   - `FACEBOOK_ACCESS_TOKEN`: Your Facebook Page access token.
-   - `YOUTUBE_TOKEN_CONTENT`: Copy-paste the raw JSON text from your local `youtube_token.json`.
-   - `CLIENT_SECRET_CONTENT`: Copy-paste the raw JSON text from your local `client_secret.json`.
-   - `YOUTUBE_COOKIES_CONTENT`: (Optional) Copy-paste the contents of `youtube-cookies.txt`.
-5. Click **Apply**. Render will automatically build the Docker container (with FFmpeg, Node.js, and subtitle fonts) and launch the service!
+### 🛡️ Why Render Free Tier Sleeps & How We Prevent It
 
-### Option B: Manual Web Service Deploy (Docker)
-1. Go to [Render Dashboard](https://dashboard.render.com/) -> **New + > Web Service**.
-2. Connect `https://github.com/Naserkhan07/money-printer.git`.
-3. Configure the service:
-   - **Environment**: `Docker`
-   - **DockerfilePath**: `Dockerfile`
-   - **Instance Type**: `Starter` ($7/mo recommended for continuous video encoding; or `Free`)
-   - **Health Check Path**: `/`
-4. In **Environment Variables**, add the keys from [`.env.example`](.env.example).
-5. Click **Create Web Service**.
+By default, Render's Free tier spins down web services after **15 minutes of inactivity**. 
 
-### 🔄 Automatic GitHub Deployments
-Every time you push code changes to `main`, GitHub Actions can automatically notify Render to build and redeploy:
-1. In your Render Service settings, copy the **Deploy Hook** URL (`https://api.render.com/deploy/srv-xxxx?key=yyyy`).
-2. In your GitHub repository, go to **Settings > Secrets and variables > Actions > New repository secret**.
-3. Name: `RENDER_DEPLOY_HOOK_URL`, Value: Paste your Deploy Hook URL.
-4. Now, every `git push origin main` triggers an instant rebuild and deploy automatically!
+Money Printer includes a **3-Layer Anti-Sleep Defense System** so your pipeline and autopilot stay awake 24/7 forever without paying a dime:
+
+1. **Built-in Container Self-Pinger:** `run_render.py` detects `$RENDER_EXTERNAL_URL` and automatically sends an HTTP request to `/healthz` every **9 minutes**, continuously resetting Render's 15-minute inactivity timer from within the cloud!
+2. **Automated GitHub Actions Cron (`keep-alive.yml`):** GitHub Actions automatically pings your Render URL every **10 minutes** from GitHub's servers, guaranteeing the service stays active even if the container restarts.
+3. **UptimeRobot Support:** You can also point a free [UptimeRobot](https://uptimerobot.com/) monitor to `https://your-service.onrender.com/healthz` (5-minute interval).
+
+---
+
+### 📋 Step-by-Step Render Deployment (Standard Web Service)
+
+#### 1. Create a New Web Service on Render
+1. Go to your [Render Dashboard](https://dashboard.render.com/) and click **New + > Web Service**.
+2. Select **Build and deploy from a Git repository** and connect:
+   `https://github.com/Naserkhan07/money-printer.git`
+3. Configure the service settings:
+   - **Name**: `money-printer` (or your preferred name)
+   - **Language / Runtime**: `Docker`
+   - **Dockerfile Path**: `Dockerfile`
+   - **Instance Type**: `Free` (or `Starter` $7/mo for faster CPU video encoding)
+   - **Health Check Path**: `/healthz`
+
+#### 2. Set Environment Variables
+In the **Environment Variables** section, add your keys:
+
+| Key | Value / Instructions |
+| :--- | :--- |
+| `GROQ_API_KEY` | Your Groq API key (`gsk_...`) |
+| `FREE_LLM_BASE_URL` | `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1` |
+| `FREE_LLM_MODEL` | `Meta-Llama-3_3-70B-Instruct` |
+| `MIN_UPLOADS_PER_SLOT` | `3` |
+| `UPLOAD_YOUTUBE` | `true` |
+| `UPLOAD_INSTAGRAM` | `true` |
+| `UPLOAD_FACEBOOK` | `true` |
+| `INSTAGRAM_ACCESS_TOKEN` | Meta Graph API user token for `@splitzz.isodope` |
+| `INSTAGRAM_USER_ID` | `17841432791787477` |
+| `FACEBOOK_PAGE_ID` | `1231108530089378` |
+| `FACEBOOK_ACCESS_TOKEN` | Facebook Page access token for `Splitzz` |
+| `YOUTUBE_TOKEN_CONTENT` | Paste the exact JSON text from your local `youtube_token.json` file |
+| `CLIENT_SECRET_CONTENT` | Paste the exact JSON text from your local `client_secret.json` file |
+| `YOUTUBE_COOKIES_CONTENT` | *(Optional)* Paste your `youtube-cookies.txt` file |
+
+#### 3. Click "Deploy Web Service"
+- Render will automatically build the container (installing Debian, FFmpeg, Node.js, and font libraries).
+- It will bind the Live Mission Control Dashboard on `$PORT` and launch the 24/7 background worker.
+
+---
+
+### 🔄 GitHub Actions Workflows
+
+Two automated workflows are included in `.github/workflows/`:
+
+1. **`render-deploy.yml` (Auto-Deploy on Push):**
+   - Automatically triggers Render to rebuild whenever you push new code to `main`.
+   - Setup: In GitHub Repo Settings $\rightarrow$ **Secrets and variables** $\rightarrow$ **Actions**, add `RENDER_DEPLOY_HOOK_URL` (copied from Render Service Settings $\rightarrow$ Deploy Hook).
+
+2. **`keep-alive.yml` (24/7 Anti-Sleep Pinger):**
+   - Runs every 10 minutes on GitHub Actions to ping your app's `/healthz` endpoint.
+   - Setup: In GitHub Repo Settings $\rightarrow$ **Secrets and variables** $\rightarrow$ **Actions**, add `RENDER_APP_URL` with your Render service URL (e.g. `https://money-printer.onrender.com`).
 
 ---
 

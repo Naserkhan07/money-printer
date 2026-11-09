@@ -19,3 +19,4 @@ jobs:
           echo "Triggering deployment on Render..."
           curl -f -X POST "${RENDER_DEPLOY_HOOK_URL}"
           echo "Render deployment triggered successfully!"
+

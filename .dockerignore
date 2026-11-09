@@ -20,3 +20,4 @@ youtube_token.json
 client_secret.json
 assets/gameplay/**/*.mp4
 !assets/gameplay/**/README.md
+

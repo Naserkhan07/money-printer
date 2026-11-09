@@ -50,3 +50,4 @@ EXPOSE 10000
 
 # Unified cloud entrypoint (Runs Mission Control Dashboard on $PORT + 24/7 Automation Worker)
 CMD ["python", "run_render.py"]
+
