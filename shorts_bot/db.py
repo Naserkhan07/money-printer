@@ -663,6 +663,46 @@ class JobRepository:
                     pass
         return None
 
+    def get_slot_upload_count(self, platform: str, since_dt: datetime) -> int:
+        """Returns the number of uploads completed for this platform since the given datetime."""
+        from datetime import UTC, datetime, timedelta, timezone
+        if since_dt.tzinfo is None:
+            ist = timezone(timedelta(hours=5, minutes=30))
+            since_utc = since_dt.replace(tzinfo=ist).astimezone(UTC)
+        else:
+            since_utc = since_dt.astimezone(UTC)
+        since_iso = since_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) as cnt FROM platform_uploads
+                WHERE platform = ? AND uploaded_at >= ?
+                """,
+                (platform, since_iso),
+            ).fetchone()
+            if row and int(row["cnt"]) > 0:
+                return int(row["cnt"])
+
+            col_map = {
+                "YouTube": "youtube_video_id",
+                "Instagram": "instagram_media_id",
+                "Facebook": "facebook_video_id",
+            }
+            col = col_map.get(platform)
+            if col:
+                fallback_row = connection.execute(
+                    f"""
+                    SELECT COUNT(*) as cnt FROM job_clips c
+                    JOIN jobs j ON j.id = c.job_id
+                    WHERE c.{col} IS NOT NULL AND c.{col} != ''
+                    AND j.updated_at >= ?
+                    """,
+                    (since_iso,),
+                ).fetchone()
+                if fallback_row:
+                    return int(fallback_row["cnt"])
+        return 0
+
     def reconcile_missing_files(self) -> int:
         from pathlib import Path
         cleared = 0

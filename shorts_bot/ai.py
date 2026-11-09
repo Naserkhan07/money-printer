@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from groq import APIStatusError, AsyncGroq, RateLimitError
+import httpx
 
 from .errors import AIError
 from .models import ShortPlan, SourceVideo
@@ -40,18 +41,24 @@ class AIPlanner:
         transcription_model: str,
         base_url: str = "",
         target_duration: int = 60,
-        max_transcript_chars: int = 8_000,
+        max_transcript_chars: int = 4_000,
         youtube_description_target_chars: int = 4_200,
         instagram_caption_target_chars: int = 2_000,
         instagram_hashtags: list[str] | None = None,
         metadata_delay_seconds: int = 22,
+        free_llm_base_url: str = "",
+        free_llm_api_key: str = "",
+        free_llm_model: str = "",
     ) -> None:
+        self.api_key = (api_key or "").strip()
         self.base_url = (base_url or "").strip()
         if self.base_url:
-            self.client = AsyncGroq(api_key=api_key or "freellmapi-key", base_url=self.base_url)
+            self.client = AsyncGroq(api_key=self.api_key or "freellmapi-key", base_url=self.base_url)
+        elif self.api_key:
+            self.client = AsyncGroq(api_key=self.api_key)
         else:
-            self.client = AsyncGroq(api_key=api_key)
-        self.transcribe_client = AsyncGroq(api_key=api_key) if (self.base_url and api_key) else self.client
+            self.client = None
+        self.transcribe_client = AsyncGroq(api_key=self.api_key) if self.api_key else self.client
         self.model = model
         self.fallback_model = fallback_model
         self.transcription_model = transcription_model
@@ -62,50 +69,95 @@ class AIPlanner:
         self.instagram_hashtags = instagram_hashtags or []
         self.metadata_delay_seconds = metadata_delay_seconds
 
-    async def check_models(self) -> tuple[str, str]:
-        """Validate AI access and automatically select active models."""
-        if self.base_url:
-            if not self.model or self.model == "qwen/qwen3.6-27b":
-                self.model = "auto"
-            self.fallback_model = self.fallback_model or self.model
-            logger.info("Using FreeLLMAPI/gateway at %s with model '%s'", self.base_url, self.model)
-            return self.model, self.transcription_model
+        # Awesome Free LLM API integration (e.g. OVHcloud, OpenRouter, Gemini, Mistral)
+        self.free_llm_base_url = (
+            free_llm_base_url
+            or self.base_url
+            or "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"
+        ).strip()
+        self.free_llm_api_key = (free_llm_api_key or "").strip()
+        self.free_llm_model = (
+            free_llm_model or "Meta-Llama-3_3-70B-Instruct"
+        ).strip()
+
+    async def _query_free_llm(
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        token_budget: int = 500,
+        timeout: float = 30.0,
+    ) -> dict[str, Any] | None:
+        if not self.free_llm_base_url:
+            return None
+        endpoint = f"{self.free_llm_base_url.rstrip('/')}/chat/completions"
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self.free_llm_api_key:
+            headers["Authorization"] = f"Bearer {self.free_llm_api_key}"
+
+        json_instruction = (
+            "\n\nReturn ONLY a valid JSON object matching the requested schema. "
+            "Do not include any markdown fences or commentary."
+        )
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": f"{prompt}{json_instruction}"})
+
+        payload = {
+            "model": self.free_llm_model,
+            "messages": messages,
+            "temperature": 0.3,
+            "max_tokens": token_budget,
+        }
 
         try:
-            response = await self.client.models.list()
-            available = {
-                str(_field(model, "id", ""))
-                for model in (_field(response, "data", []) or [])
-                if str(_field(model, "id", ""))
-            }
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(endpoint, json=payload, headers=headers)
+                if resp.status_code != 200:
+                    logger.warning(
+                        "Free LLM API at %s returned status %s: %s",
+                        self.free_llm_base_url,
+                        resp.status_code,
+                        resp.text[:150],
+                    )
+                    return None
+                data = resp.json()
+                choices = data.get("choices") or []
+                if not choices:
+                    return None
+                content = choices[0].get("message", {}).get("content", "")
+                if not content:
+                    return None
+                return _parse_json_object(content)
         except Exception as exc:
-            raise AIError(f"Groq credential/model check failed: {exc}") from exc
+            logger.warning("Free LLM API query failed (%s); falling back.", exc)
+            return None
 
-        qwen_models = sorted(model for model in available if model.startswith("qwen/"))
-        if self.model not in available:
-            preferred = "qwen/qwen3.8-27b"
-            if preferred in available:
-                self.model = preferred
-            elif qwen_models:
-                self.model = qwen_models[-1]
-            elif "openai/gpt-oss-20b" in available:
-                self.model = "openai/gpt-oss-20b"
-            elif available:
-                self.model = sorted(available)[0]
-            else:
-                raise AIError(
-                    "No active non-OpenAI Qwen planning model is available on this Groq account."
-                )
-        if self.fallback_model not in available:
-            self.fallback_model = self.model
-        if self.transcription_model not in available:
-            if "whisper-large-v3" in available:
-                self.transcription_model = "whisper-large-v3"
-            elif any("whisper" in m for m in available):
-                self.transcription_model = next(m for m in available if "whisper" in m)
-            else:
-                raise AIError(f"Groq transcription model {self.transcription_model} is not available.")
-        return self.model, self.transcription_model
+    async def check_models(self) -> tuple[str, str]:
+        """Validate AI access across Groq and Free LLM APIs."""
+        groq_ok = False
+        if self.client and self.api_key:
+            try:
+                response = await self.client.models.list()
+                available = {
+                    str(_field(model, "id", ""))
+                    for model in (_field(response, "data", []) or [])
+                    if str(_field(model, "id", ""))
+                }
+                if self.model in available or any(m.startswith("qwen/") for m in available):
+                    groq_ok = True
+                if self.transcription_model not in available:
+                    if "whisper-large-v3-turbo" in available:
+                        self.transcription_model = "whisper-large-v3-turbo"
+                    elif "whisper-large-v3" in available:
+                        self.transcription_model = "whisper-large-v3"
+            except Exception as exc:
+                logger.warning("Groq check notice: %s", exc)
+
+        free_llm_status = f"Free LLM ready ({self.free_llm_model} @ {self.free_llm_base_url})"
+        if groq_ok:
+            return f"{self.model} (+{free_llm_status})", self.transcription_model
+        return free_llm_status, self.transcription_model
 
     async def transcribe(self, audio_path: Path) -> str:
         return await self._transcribe(audio_path)
@@ -357,75 +409,88 @@ Hashtags and source credit are added by the application.
         last_rate_limit: RateLimitError | None = None
         token_budgets = [max_tokens]
 
-        for model in models:
-            for token_budget in token_budgets:
-                try:
-                    request = _completion_request(
-                        model,
-                        system_prompt,
-                        prompt,
-                        token_budget,
-                        json_mode=True,
-                    )
-                    response = await self.client.chat.completions.create(**request)
-                    content = response.choices[0].message.content
-                    if not content:
-                        logger.warning("Groq model %s returned empty editing plan; trying next.", model)
+        if self.client:
+            for model in models:
+                for token_budget in token_budgets:
+                    try:
+                        request = _completion_request(
+                            model,
+                            system_prompt,
+                            prompt,
+                            token_budget,
+                            json_mode=True,
+                        )
+                        response = await self.client.chat.completions.create(**request)
+                        content = response.choices[0].message.content
+                        if not content:
+                            logger.warning("Groq model %s returned empty editing plan; trying next.", model)
+                            break
+                        return _parse_json_object(content)
+                    except RateLimitError as exc:
+                        last_rate_limit = exc
+                        logger.warning("Groq model %s rate limited (%s); trying Free LLM API fallback.", model, exc)
                         break
-                    return _parse_json_object(content)
-                except RateLimitError as exc:
-                    last_rate_limit = exc
-                    logger.warning("Groq model %s rate limited (%s); trying next.", model, exc)
-                    break
-                except APIStatusError as exc:
-                    detail = str(exc).lower()
-                    if (
-                        exc.status_code == 400
-                        and "json_validate_failed" in detail
-                    ):
-                        try:
-                            fallback_request = _completion_request(
-                                model,
-                                system_prompt,
-                                prompt,
-                                token_budget,
-                                json_mode=False,
-                            )
-                            fallback_response = await self.client.chat.completions.create(
-                                **fallback_request
-                            )
-                            fallback_content = fallback_response.choices[0].message.content
-                            if fallback_content:
-                                return _parse_json_object(fallback_content)
-                        except Exception:
-                            pass
-                    if exc.status_code == 413:
-                        raise _PromptTooLargeError(str(exc)) from exc
-                    logger.warning(
-                        "Groq model %s returned status %s (%s); trying fallback.",
-                        model,
-                        exc.status_code,
-                        exc,
-                    )
-                    break
-                except (json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError) as exc:
-                    logger.warning(
-                        "Groq model %s returned invalid editing plan (%s); trying fallback.",
-                        model,
-                        exc,
-                    )
-                    break
-                except Exception as exc:
-                    logger.warning(
-                        "Groq model %s request failed (%s); trying fallback.",
-                        model,
-                        exc,
-                    )
-                    break
+                    except APIStatusError as exc:
+                        detail = str(exc).lower()
+                        if (
+                            exc.status_code == 400
+                            and "json_validate_failed" in detail
+                        ):
+                            try:
+                                fallback_request = _completion_request(
+                                    model,
+                                    system_prompt,
+                                    prompt,
+                                    token_budget,
+                                    json_mode=False,
+                                )
+                                fallback_response = await self.client.chat.completions.create(
+                                    **fallback_request
+                                )
+                                fallback_content = fallback_response.choices[0].message.content
+                                if fallback_content:
+                                    return _parse_json_object(fallback_content)
+                            except Exception:
+                                pass
+                        if exc.status_code == 413:
+                            raise _PromptTooLargeError(str(exc)) from exc
+                        logger.warning(
+                            "Groq model %s returned status %s (%s); trying fallback.",
+                            model,
+                            exc.status_code,
+                            exc,
+                        )
+                        break
+                    except (json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError) as exc:
+                        logger.warning(
+                            "Groq model %s returned invalid editing plan (%s); trying fallback.",
+                            model,
+                            exc,
+                        )
+                        break
+                    except Exception as exc:
+                        logger.warning(
+                            "Groq model %s request failed (%s); trying fallback.",
+                            model,
+                            exc,
+                        )
+                        break
+
+        # Fallback to Awesome Free LLM API (OpenAI-compatible)
+        if self.free_llm_base_url:
+            logger.info("Querying Free LLM API at %s with model '%s'", self.free_llm_base_url, self.free_llm_model)
+            free_plan = await self._query_free_llm(
+                prompt,
+                system_prompt=system_prompt,
+                token_budget=max_tokens,
+            )
+            if free_plan:
+                logger.info("Successfully generated editing plan using Free LLM API (%s)", self.free_llm_model)
+                return free_plan
 
         if last_rate_limit:
             raise last_rate_limit
-        raise AIError(f"All configured Groq models ({', '.join(models)}) failed.")
+        raise AIError(f"All configured AI models and Free LLM providers failed.")
 
     @staticmethod
     def _compress_audio(audio_path: Path) -> Path:

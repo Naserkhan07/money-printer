@@ -30,12 +30,13 @@ timezone = "Asia/Kolkata"       # All times are in IST (UTC+05:30)
 advance_prep_minutes = 60       # Wake up 60 min before slot to prepare/render video
 
 # Max uploads per day per platform — evenly spread across defined slots:
-#   YouTube  : 11-12 slots/day (morning / afternoon / evening)
-#   Instagram: 10 slots/day    (morning / evening)
-#   Facebook : 10 slots/day    (morning / evening)
-max_daily_youtube   = 10
-max_daily_instagram = 10
-max_daily_facebook  = 10
+#   YouTube  : 11-12 slots/day x 3 videos/slot = ~35/day
+#   Instagram: 10 slots/day x 3 videos/slot = ~30/day
+#   Facebook : 10 slots/day x 3 videos/slot = ~30/day
+max_daily_youtube   = 50
+max_daily_instagram = 50
+max_daily_facebook  = 50
+min_uploads_per_slot = 3
 
 # ----------------------------------------------------------------------
 # Hands-Free Channel Auto-Pilot

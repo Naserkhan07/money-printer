@@ -1,20 +1,6 @@
 # Add one authorized YouTube video URL per line below.
 # A URL is removed atomically as soon as that video has downloaded successfully.
 # Downloaded URLs are recorded in work/downloaded-links.log.
-# [Autopilot: MrBeast] Beat Professional Athlete, Win $100,000
-https://www.youtube.com/watch?v=_c2e1NcI3Sc
-# [Autopilot: Outdoor Boys] Building an Off Grid Forge on My Alaskan Homestead
-https://www.youtube.com/watch?v=ZRIBNLUXbZo
-# [Autopilot: Nick DiGiovanni] $1 vs $10,000 Mystery Box Challenge
-https://www.youtube.com/watch?v=9ZqdgmaO6gM
-# [Autopilot: IShowSpeed] The Video Ends When My Collection Is Worth $5,000!
-https://www.youtube.com/watch?v=cYJD2IhYp7k
-# [Autopilot: BeastBoyShub] SAYING BYE TO THE FATTY BOY | Dragons Dogma 2 - Part 4
-https://www.youtube.com/watch?v=-tC86ZY4PGY
-# [Autopilot: GothamChess] WITTYALIEN DEFEATS MAGNUS CARLSEN AGAIN??????
-https://www.youtube.com/watch?v=7OtLPEogiug
-# [Autopilot: Dream] Stripped Logs
-https://www.youtube.com/watch?v=iSwIiTNVvWo
 # [Autopilot: Not Your Type] Every Indian Street Food Ever !
 https://www.youtube.com/watch?v=7Wi38uVsW98
 # [Autopilot: HardToonz] Insane DIWALI Moments | HardToonz
@@ -25,8 +11,8 @@ https://www.youtube.com/watch?v=Z4aMdO8K0XE
 https://www.youtube.com/watch?v=tg2MwT5FPdY
 # [Autopilot: Warangal Diaries] Sardiyan Hogaye Shuru | Hyderabadi Comedy | Warangal Diaries
 https://www.youtube.com/watch?v=nZsz-1FWB2I
-# [Autopilot: DiscoveryChannelInd] Massive Yukon Paydirt & Record Cleanouts | Gold Rush S6 | Discovery Channel India
-https://www.youtube.com/watch?v=Bmh2l4cFuhA
+# [Autopilot: DiscoveryChannelInd] Mukesh Mills Mein Shoot Karne Gayi Team Ke Saath Kya Hua? | Mukesh Mills | Sannata
+https://www.youtube.com/watch?v=EYKcfyo2HBE
 # [Autopilot: Shakeel Bhai] GORDAN RAMSAY X SHAKEEL BHAI EP01
 https://www.youtube.com/watch?v=2fXOQK5LHwA
 # [Autopilot: Grox] 100 Villagers Vs. Gorilla

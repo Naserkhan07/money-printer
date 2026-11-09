@@ -95,17 +95,23 @@ flowchart TD
 - **12+ Local Gameplay Videos**: Cycles across multiple high-bitrate footage files in `assets/gameplay/`.
 - **Full-Timeline Random Offset**: Rather than playing from the same spot, the engine seeks randomly across the **entire 10–30 minute length** of the gameplay file (`random.uniform(0.0, max_start)`). Every Short gets an exciting, unique scene!
 
-### ⚡ 3. Blazing Fast Rendering & AI Pipeline
-- **AI Highlight Selection**: Instead of chopping an entire video into 45 redundant parts, Groq AI extracts the **top 3 viral highlights** (15x faster turnaround!).
+### ⚡ 3. Blazing Fast Rendering & Dual AI Pipeline
+- **Dual AI Engine (Groq + Free LLM APIs)**: Integrates official Groq (`qwen/qwen3.8-27b`) alongside permanent free OpenAI-compatible LLMs (from [awesome-free-llm-apis](https://github.com/mnfst/awesome-free-llm-apis) such as OVHcloud `Meta-Llama-3_3-70B-Instruct`, OpenRouter, Mistral, or Gemini). If Groq hits a token ceiling, the engine switches to the free LLM endpoint automatically without user intervention or dropped jobs.
+- **Top 3 Viral Highlight Extraction**: Instead of chopping an entire video into 45 redundant parts, AI extracts the **top 3 viral 60-second highlights** (15x faster turnaround!).
 - **Hardware-Accelerated FFmpeg**: Configured with `-preset veryfast`, `-sws_flags bicubic`, and `-threads 0` multi-core CPU encoding.
-- **Instant Transcription**: Uses Groq `whisper-large-v3-turbo` for near-instant transcription and word-level karaoke caption sync.
+- **Instant Transcription**: Uses Groq `whisper-large-v3-turbo` with built-in compression to process even 90-minute episodes under Groq's 25 MB file limit.
 
-### 🗑️ 4. Zero-Disk Accumulation (Auto-Purge)
+### ⏰ 4. Non-Stop 24/7 Production & Batch Slot Publishing
+- **Continuous Background Production**: The pipeline operates 24/7 downloading, transcribing, clipping, and rendering 1080×1920 MP4s into a ready-to-publish queue regardless of whether an upload slot is open.
+- **3 Videos Minimum Per Scheduled Slot**: When an audience engagement window arrives (IST), the publisher uploads **at least 3 videos minimum** for that platform (with 15-second natural spacing between uploads in the batch), then pauses uploads on that platform until its next window while continuing background production.
+- **Safety Daily Limits**: Configured with up to 50 uploads per day per platform across morning, afternoon, and evening peak slots.
+
+### 🗑️ 5. Zero-Disk Accumulation (Auto-Purge)
 - Automatically purges raw source downloads, intermediate audio files, thumbnails, and rendered MP4s immediately after uploading.
 - Prevents disk exhaustion (`[Errno 28] No space left on device`) and keeps your drive clean.
 - SQLite audit records prevent ever repeating or re-downloading previously processed content.
 
-### 🌐 5. Live Mission Control Web Dashboard (`http://localhost:5050`)
+### 🌐 6. Live Mission Control Web Dashboard (`http://localhost:5050`)
 - **Real-Time Health Status**: Live status monitors for YouTube, Instagram, Facebook, Groq AI, and FFmpeg.
 - **Dropzone File Upload**: Drag-and-drop local video files directly from your browser.
 - **Quick Queue**: Paste any YouTube link to process on-demand.
@@ -165,7 +171,10 @@ Copy `.env.example` to `.env` and fill in your API credentials:
 cp .env.example .env
 ```
 Key credentials required:
-- `GROQ_API_KEY`: Fast AI transcription and metadata generation ([Groq Console](https://console.groq.com/)).
+- `GROQ_API_KEY`: Primary AI transcription and metadata generation ([Groq Console](https://console.groq.com/)).
+- `FREE_LLM_BASE_URL`: Zero-key OpenAI-compatible endpoint from [awesome-free-llm-apis](https://github.com/mnfst/awesome-free-llm-apis) (defaults to OVHcloud Kepler `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1`).
+- `FREE_LLM_MODEL`: Model name (defaults to `Meta-Llama-3_3-70B-Instruct`).
+- `MIN_UPLOADS_PER_SLOT`: Minimum number of videos to upload when a slot opens (defaults to `3`).
 - `client_secret.json`: Downloaded from Google Cloud Console with YouTube Data API enabled.
 - `INSTAGRAM_ACCESS_TOKEN`: Meta Graph API token for Instagram Professional accounts.
 - `FACEBOOK_PAGE_ID` & `FACEBOOK_ACCESS_TOKEN`: Page token for Facebook Reels.
@@ -189,7 +198,7 @@ Overall Status: HEALTHY
   ✅ ffprobe: READY
 
 [SERVICES & PLATFORMS]
-  ✅ Groq: READY (qwen/qwen3.8-27b | whisper-large-v3-turbo)
+  ✅ Groq: READY (qwen/qwen3.8-27b (+Free LLM ready (Meta-Llama-3_3-70B-Instruct)) | whisper-large-v3-turbo)
   ✅ YouTube: READY (Splitzzz)
   ✅ Instagram: READY (@splitzz.isodope)
   ✅ Facebook: READY (Splitzz)

@@ -161,10 +161,11 @@ class Settings:
     caption_highlight_colors: tuple[str, ...]
     scheduler_enabled: bool = True
     scheduler_advance_prep_minutes: int = 60
-    scheduler_max_daily_youtube: int = 10
-    scheduler_max_daily_instagram: int = 10
-    scheduler_max_daily_facebook: int = 10
+    scheduler_max_daily_youtube: int = 50
+    scheduler_max_daily_instagram: int = 50
+    scheduler_max_daily_facebook: int = 50
     scheduler_timezone: str = "Asia/Kolkata"
+    min_uploads_per_slot: int = 3
     freellmapi_url: str = ""
     freellmapi_api_key: str = ""
     freellmapi_model: str = ""
@@ -306,7 +307,7 @@ class Settings:
             ).expanduser(),
             links_poll_seconds=_int_env("LINKS_POLL_SECONDS", 30),
             credential_check_minutes=_int_env("CREDENTIAL_CHECK_MINUTES", 60),
-            pending_retry_jobs_per_cycle=_int_env("PENDING_RETRY_JOBS_PER_CYCLE", 3),
+            pending_retry_jobs_per_cycle=_int_env("PENDING_RETRY_JOBS_PER_CYCLE", 10),
             autopilot_enabled=_bool_env(
                 "AUTOPILOT_ENABLED",
                 bool(autopilot_section.get("enabled", False)),
@@ -351,36 +352,45 @@ class Settings:
             ),
             scheduler_max_daily_youtube=int(
                 os.getenv("SCHEDULER_MAX_DAILY_YOUTUBE")
-                or scheduler_section.get("max_daily_youtube", 10)
+                or scheduler_section.get("max_daily_youtube", 50)
             ),
             scheduler_max_daily_instagram=int(
                 os.getenv("SCHEDULER_MAX_DAILY_INSTAGRAM")
-                or scheduler_section.get("max_daily_instagram", 10)
+                or scheduler_section.get("max_daily_instagram", 50)
             ),
             scheduler_max_daily_facebook=int(
                 os.getenv("SCHEDULER_MAX_DAILY_FACEBOOK")
-                or scheduler_section.get("max_daily_facebook", 10)
+                or scheduler_section.get("max_daily_facebook", 50)
             ),
             scheduler_timezone=str(
                 os.getenv("SCHEDULER_TIMEZONE")
                 or scheduler_section.get("timezone", "Asia/Kolkata")
             ).strip(),
+            min_uploads_per_slot=int(
+                os.getenv("MIN_UPLOADS_PER_SLOT")
+                or os.getenv("UPLOADS_PER_SLOT")
+                or 3
+            ),
             freellmapi_url=str(
-                os.getenv("FREELLMAPI_URL")
+                os.getenv("FREE_LLM_BASE_URL")
+                or os.getenv("FREELLMAPI_URL")
                 or os.getenv("LLM_BASE_URL")
                 or os.getenv("OPENAI_BASE_URL")
                 or _nested_string(channel_config, "ai", "base_url")
+                or "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"
             ).strip(),
             freellmapi_api_key=str(
-                os.getenv("FREELLMAPI_API_KEY")
+                os.getenv("FREE_LLM_API_KEY")
+                or os.getenv("FREELLMAPI_API_KEY")
                 or os.getenv("LLM_API_KEY")
-                or os.getenv("OPENAI_API_KEY")
-                or _nested_string(channel_config, "ai", "api_key")
+                or _nested_string(channel_config, "free_llm", "api_key")
             ).strip(),
             freellmapi_model=str(
-                os.getenv("FREELLMAPI_MODEL")
+                os.getenv("FREE_LLM_MODEL")
+                or os.getenv("FREELLMAPI_MODEL")
                 or os.getenv("LLM_MODEL")
-                or _nested_string(channel_config, "ai", "model")
+                or _nested_string(channel_config, "free_llm", "model")
+                or "Meta-Llama-3_3-70B-Instruct"
             ).strip(),
         )
         settings.validate_common()

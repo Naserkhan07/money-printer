@@ -21,11 +21,22 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Daily upload limits: Minimum 10 uploads per day per platform
+
+def normalize_platform(name: str) -> str:
+    n = name.strip().lower()
+    if n in ("youtube", "yt"):
+        return "YouTube"
+    if n in ("instagram", "ig"):
+        return "Instagram"
+    if n in ("facebook", "fb"):
+        return "Facebook"
+    return name
+
+# Daily upload limits: Minimum 50 uploads per day per platform across all scheduled slots
 DEFAULT_DAILY_LIMITS: dict[str, int] = {
-    "YouTube": 10,
-    "Instagram": 10,
-    "Facebook": 10,
+    "YouTube": 50,
+    "Instagram": 50,
+    "Facebook": 50,
 }
 
 # Optimal posting time slots per platform per weekday (0 = Monday … 6 = Sunday)
@@ -172,12 +183,14 @@ class ContentScheduler:
         advance_prep_minutes: int = 60,
         schedules: dict[str, dict[int, list[time]]] | None = None,
         timezone_str: str = "Asia/Kolkata",
+        min_uploads_per_slot: int = 3,
     ) -> None:
         self.daily_limits = dict(daily_limits or DEFAULT_DAILY_LIMITS)
         self.advance_prep_minutes = advance_prep_minutes
         self.schedules = schedules or OPTIMAL_SCHEDULES
         self.timezone_str = timezone_str
         self.tz = self._resolve_timezone(timezone_str)
+        self.min_uploads_per_slot = max(1, min_uploads_per_slot)
 
     @staticmethod
     def _resolve_timezone(tz_name: str) -> timezone:
@@ -211,7 +224,8 @@ class ContentScheduler:
 
     def get_slots_for_day(self, platform: str, target_date: datetime) -> list[ScheduledSlot]:
         """Returns all scheduled slots for the given date and platform."""
-        platform_sched = self.schedules.get(platform, {})
+        norm_platform = normalize_platform(platform)
+        platform_sched = self.schedules.get(norm_platform) or self.schedules.get(platform, {})
         day_times = platform_sched.get(target_date.weekday(), [])
         day_name = target_date.strftime("%A")
         slots: list[ScheduledSlot] = []
@@ -333,16 +347,16 @@ class ContentScheduler:
     ) -> tuple[bool, str]:
         """
         Determines whether a video can be uploaded right now based on:
-        1. Strict daily limit (min 10 uploads per platform per day).
-        2. Minimum spacing (20 minutes) between uploads on the same platform.
-        3. Strict scheduled slot window:
-           - Waking 1 hour in advance: video is prepared and rendered, upload deferred until slot hits.
-           - At scheduled slot time: video is published to that ONE specific platform!
-           - Outside scheduled slot: waiting for next scheduled slot.
-        4. Guard against re-uploading on the same slot.
+        1. Daily cap (min 50 uploads per platform per day).
+        2. Strict scheduled slot window:
+           - Outside scheduled slot: waiting for next scheduled slot while continuously producing shorts.
+           - At scheduled slot time: posts at least 3 videos minimum for that slot.
+        3. Minimum batch spacing (15 seconds) between consecutive uploads in the same slot batch.
+        4. Guard against exceeding min_uploads_per_slot (default 3) for the current slot.
         """
+        platform = normalize_platform(platform)
         now = self.current_dt(current_time)
-        limit = self.daily_limits.get(platform, 10)
+        limit = self.daily_limits.get(platform, 50)
         date_str = now.strftime("%Y-%m-%d")
         count_today = self.get_daily_upload_count(repository, platform, date_str)
 
@@ -353,57 +367,55 @@ class ContentScheduler:
                 f"Daily limit of {limit} uploads reached today ({count_today}/{limit}). Resumes tomorrow morning.",
             )
 
-        # 2. Minimum spacing from last upload on this platform (20 minutes)
-        if hasattr(repository, "get_last_platform_upload_time"):
-            last = repository.get_last_platform_upload_time(platform)
-            if last:
-                if last.tzinfo is None:
-                    last = last.replace(tzinfo=UTC)
-                last_ist = last.astimezone(self.tz).replace(tzinfo=None)
-                elapsed = (now - last_ist).total_seconds() / 60.0
-                if elapsed < 20:
-                    return (
-                        False,
-                        f"Spacing interval active ({int(elapsed)}m since last upload on {platform}; 20m minimum spacing required).",
-                    )
-
-        # 3. Check if currently in an active scheduled slot's publish window
-        is_active, active_slot = self.is_slot_active_for_publish(platform, now, window_minutes=25)
+        # 2. Check if currently in an active scheduled slot's publish window (opens at slot -2m, closes +35m)
+        is_active, active_slot = self.is_slot_active_for_publish(platform, now, window_minutes=35)
 
         if not is_active or active_slot is None:
-            # Check if 1-hour advance preparation window is active
             is_prep, prep_slot = self.is_prep_due(platform, now)
             if is_prep:
                 target_12h = prep_slot.target_time.strftime("%I:%M %p")
                 return (
                     False,
-                    f"Advance prep window active ({target_12h}). Video rendered 1 hour in advance; waiting for scheduled slot to publish.",
+                    f"Advance prep window active ({target_12h}). Video rendered in advance; waiting for scheduled slot to publish.",
                 )
             next_slot = self.get_next_slot(platform, now)
             next_12h = next_slot.target_time.strftime("%I:%M %p")
             prep_12h = next_slot.prep_time.strftime("%I:%M %p")
             return (
                 False,
-                f"Outside scheduled upload window. Next scheduled slot at {next_12h} (prep starts at {prep_12h}) [{count_today}/{limit} uploaded today].",
+                f"Outside scheduled upload window. Next scheduled slot at {next_12h} (prep starts at {prep_12h}) [{count_today}/{limit} uploaded today]. Continuing background short production.",
             )
 
-        # 4. Guard: check if an upload already occurred for this slot
+        # 3. Check how many uploads have occurred during this active slot
+        slot_start = active_slot.target_time - timedelta(minutes=5)
+        slot_count = (
+            repository.get_slot_upload_count(platform, slot_start)
+            if hasattr(repository, "get_slot_upload_count")
+            else 0
+        )
+        if slot_count >= self.min_uploads_per_slot:
+            next_slot = self.get_next_slot(platform, now)
+            next_12h = next_slot.target_time.strftime("%I:%M %p")
+            return (
+                False,
+                f"Slot {active_slot.target_time.strftime('%I:%M %p')} target reached ({slot_count}/{self.min_uploads_per_slot} videos posted). Waiting for next window at {next_12h}.",
+            )
+
+        # 4. Spacing between consecutive uploads in the same slot batch (15s minimum spacing)
         if hasattr(repository, "get_last_platform_upload_time"):
             last = repository.get_last_platform_upload_time(platform)
             if last:
                 if last.tzinfo is None:
                     last = last.replace(tzinfo=UTC)
                 last_ist = last.astimezone(self.tz).replace(tzinfo=None)
-                slot_start = active_slot.target_time - timedelta(minutes=5)
-                if last_ist >= slot_start:
-                    next_slot = self.get_next_slot(platform, now)
-                    next_12h = next_slot.target_time.strftime("%I:%M %p")
+                elapsed_sec = (now - last_ist).total_seconds()
+                if 0 <= elapsed_sec < 15:
                     return (
                         False,
-                        f"Slot {active_slot.target_time.strftime('%I:%M %p')} already published. Waiting for next window at {next_12h}.",
+                        f"Brief spacing interval active ({int(elapsed_sec)}s/15s between consecutive batch uploads on {platform}).",
                     )
 
         return (
             True,
-            f"Scheduled slot active ({active_slot.target_time.strftime('%I:%M %p')}). Publishing video #{count_today + 1} of {limit} for today.",
+            f"Scheduled slot active ({active_slot.target_time.strftime('%I:%M %p')}). Publishing video #{slot_count + 1} of {self.min_uploads_per_slot} for this slot ({count_today + 1}/{limit} today).",
         )

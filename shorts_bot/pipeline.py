@@ -113,17 +113,19 @@ class WorkflowServices:
                 video_preset=settings.video_preset,
             ),
             planner=AIPlanner(
-                api_key=settings.freellmapi_api_key or settings.groq_api_key,
-                model=settings.freellmapi_model or settings.groq_model,
+                api_key=settings.groq_api_key,
+                model=settings.groq_model,
                 fallback_model=settings.groq_fallback_model,
                 transcription_model=settings.groq_transcription_model,
-                base_url=settings.freellmapi_url,
                 target_duration=settings.clip_duration_seconds,
                 max_transcript_chars=settings.groq_max_transcript_chars,
                 youtube_description_target_chars=settings.youtube_description_target_chars,
                 instagram_caption_target_chars=settings.instagram_caption_target_chars,
                 instagram_hashtags=settings.instagram_hashtags(),
                 metadata_delay_seconds=settings.groq_metadata_delay_seconds,
+                free_llm_base_url=settings.freellmapi_url,
+                free_llm_api_key=settings.freellmapi_api_key,
+                free_llm_model=settings.freellmapi_model,
             ),
             enhancer=(
                 APIMarketVideoEnhancer(
@@ -187,6 +189,7 @@ class WorkflowServices:
                     },
                     advance_prep_minutes=settings.scheduler_advance_prep_minutes,
                     timezone_str=settings.scheduler_timezone,
+                    min_uploads_per_slot=settings.min_uploads_per_slot,
                 )
                 if settings.scheduler_enabled
                 else None
@@ -300,7 +303,7 @@ class WorkflowPipeline:
             }
             total_clips = len(clips)
             metadata_requests = 0
-            uploaded_platforms_this_run: set[str] = set()
+            uploaded_platforms_this_run: dict[str, int] = {}
             for clip in clips:
                 try:
                     if not clip.metadata_ready:
@@ -549,7 +552,7 @@ class WorkflowPipeline:
         job_dir: Path,
         blocked_platforms: dict[str, str],
         full_transcript: str | None = None,
-        uploaded_platforms_this_run: set[str] | None = None,
+        uploaded_platforms_this_run: dict[str, int] | None = None,
     ) -> JobClip:
         if self._clip_published_everywhere(clip):
             # Every enabled platform already has this clip; never re-render or re-upload it.
@@ -712,13 +715,14 @@ class WorkflowPipeline:
             )
 
         # YouTube Upload gating
+        target_per_slot = getattr(self.services.scheduler, "min_uploads_per_slot", 3) if self.services.scheduler else 3
         can_upload_youtube = bool(
             self.services.youtube_uploader
             and not clip.youtube_video_id
             and "YouTube" not in blocked_platforms
         )
         if can_upload_youtube and self.services.scheduler:
-            if uploaded_platforms_this_run is not None and "YouTube" in uploaded_platforms_this_run:
+            if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("YouTube", 0) >= target_per_slot:
                 can_upload_youtube = False
             else:
                 should_up, reason = self.services.scheduler.should_upload_now(self.repository, "YouTube")
@@ -727,6 +731,8 @@ class WorkflowPipeline:
                     logger.info("YouTube upload deferred: %s", reason)
 
         if can_upload_youtube:
+            if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("YouTube", 0) > 0:
+                await asyncio.sleep(15)
             await self._status(
                 job.id,
                 JobStatus.UPLOADING,
@@ -750,7 +756,7 @@ class WorkflowPipeline:
                         "YouTube", job.id, clip.clip_index, youtube_video_id
                     )
                 if uploaded_platforms_this_run is not None:
-                    uploaded_platforms_this_run.add("YouTube")
+                    uploaded_platforms_this_run["YouTube"] = uploaded_platforms_this_run.get("YouTube", 0) + 1
                 if clip.clip_index == 1:
                     self.repository.update(job.id, youtube_video_id=youtube_video_id)
                 await self._status(
@@ -782,7 +788,7 @@ class WorkflowPipeline:
             and "Instagram" not in blocked_platforms
         )
         if can_upload_instagram and self.services.scheduler:
-            if uploaded_platforms_this_run is not None and "Instagram" in uploaded_platforms_this_run:
+            if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("Instagram", 0) >= target_per_slot:
                 can_upload_instagram = False
             else:
                 should_up, reason = self.services.scheduler.should_upload_now(self.repository, "Instagram")
@@ -791,6 +797,8 @@ class WorkflowPipeline:
                     logger.info("Instagram upload deferred: %s", reason)
 
         if can_upload_instagram:
+            if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("Instagram", 0) > 0:
+                await asyncio.sleep(15)
             sequence_index = self.repository.clip_sequence_index(job.id, clip.clip_index)
             instagram_plan = self._instagram_plan(plan, sequence_index)
             if instagram_plan.instagram_caption != clip.instagram_caption:
@@ -825,7 +833,7 @@ class WorkflowPipeline:
                         "Instagram", job.id, clip.clip_index, instagram.media_id
                     )
                 if uploaded_platforms_this_run is not None:
-                    uploaded_platforms_this_run.add("Instagram")
+                    uploaded_platforms_this_run["Instagram"] = uploaded_platforms_this_run.get("Instagram", 0) + 1
                 if clip.clip_index == 1:
                     self.repository.update(
                         job.id,
@@ -861,7 +869,7 @@ class WorkflowPipeline:
             and "Facebook" not in blocked_platforms
         )
         if can_upload_facebook and self.services.scheduler:
-            if uploaded_platforms_this_run is not None and "Facebook" in uploaded_platforms_this_run:
+            if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("Facebook", 0) >= target_per_slot:
                 can_upload_facebook = False
             else:
                 should_up, reason = self.services.scheduler.should_upload_now(self.repository, "Facebook")
@@ -870,6 +878,8 @@ class WorkflowPipeline:
                     logger.info("Facebook upload deferred: %s", reason)
 
         if can_upload_facebook:
+            if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("Facebook", 0) > 0:
+                await asyncio.sleep(15)
             await self._status(
                 job.id,
                 JobStatus.UPLOADING,
@@ -891,7 +901,7 @@ class WorkflowPipeline:
                         "Facebook", job.id, clip.clip_index, facebook_video_id
                     )
                 if uploaded_platforms_this_run is not None:
-                    uploaded_platforms_this_run.add("Facebook")
+                    uploaded_platforms_this_run["Facebook"] = uploaded_platforms_this_run.get("Facebook", 0) + 1
                 if clip.clip_index == 1:
                     self.repository.update(
                         job.id,
