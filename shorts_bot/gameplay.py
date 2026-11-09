@@ -257,7 +257,7 @@ class GameplayManager:
             "-m",
             "yt_dlp",
             "--extractor-args",
-            "youtube:player_client=tv,android,mweb",
+            "youtube:player_client=tv,mweb,web" if cookie_file else "youtube:player_client=android,tv,mweb",
         ]
         if cookie_file:
             cmd_base.extend(["--cookies", str(cookie_file)])

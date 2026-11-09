@@ -13,7 +13,7 @@ from .errors import ConfigurationError
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off", ""}
-_DEFAULT_GROQ_MODEL = "qwen/qwen3.6-27b"
+_DEFAULT_GROQ_MODEL = "qwen/qwen3.8-27b"
 _DEPRECATED_GROQ_MODELS = {
     "llama-3.1-8b-instant": _DEFAULT_GROQ_MODEL,
     "llama-3.3-70b-versatile": _DEFAULT_GROQ_MODEL,
@@ -287,16 +287,16 @@ class Settings:
             facebook_limit_cooldown_hours=_float_env("FACEBOOK_LIMIT_COOLDOWN_HOURS", 24.0),
             youtube_description_target_chars=_int_env("YOUTUBE_DESCRIPTION_TARGET_CHARS", 4_200),
             instagram_caption_target_chars=_int_env("INSTAGRAM_CAPTION_TARGET_CHARS", 2_000),
-            groq_metadata_delay_seconds=_int_env("GROQ_METADATA_DELAY_SECONDS", 30),
-            clip_duration_seconds=_int_env("CLIP_DURATION_SECONDS", 30),
-            shorts_selection_mode=os.getenv("SHORTS_SELECTION_MODE", "full_coverage")
+            groq_metadata_delay_seconds=_int_env("GROQ_METADATA_DELAY_SECONDS", 1),
+            clip_duration_seconds=_int_env("CLIP_DURATION_SECONDS", 60),
+            shorts_selection_mode=os.getenv("SHORTS_SELECTION_MODE", "ai_highlights")
             .strip()
             .lower(),
-            max_shorts_per_video=_int_env("MAX_SHORTS_PER_VIDEO", 0),
-            video_layout=os.getenv("VIDEO_LAYOUT", "fit_black").strip().lower(),
+            max_shorts_per_video=_int_env("MAX_SHORTS_PER_VIDEO", 3),
+            video_layout=os.getenv("VIDEO_LAYOUT", "split_gameplay").strip().lower(),
             video_allow_upscale=_bool_env("VIDEO_ALLOW_UPSCALE", False),
-            video_crf=_int_env("VIDEO_CRF", 18),
-            video_preset=os.getenv("VIDEO_PRESET", "slow").strip().lower(),
+            video_crf=_int_env("VIDEO_CRF", 22),
+            video_preset=os.getenv("VIDEO_PRESET", "veryfast").strip().lower(),
             video_enhancer=os.getenv("VIDEO_ENHANCER", "none").strip().lower(),
             apimarket_api_key=os.getenv("APIMARKET_API_KEY", "").strip(),
             apimarket_base_url=os.getenv(

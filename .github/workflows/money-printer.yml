@@ -47,6 +47,22 @@ jobs:
       UPLOAD_FACEBOOK: 'true'
       MIN_UPLOADS_PER_SLOT: '3'
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GROQ_MODEL: 'qwen/qwen3.8-27b'
+      GROQ_FALLBACK_MODEL: 'qwen/qwen3.8-27b'
+      GROQ_METADATA_DELAY_SECONDS: '1'
+      SHORTS_SELECTION_MODE: 'ai_highlights'
+      MAX_SHORTS_PER_VIDEO: '3'
+      CLIP_DURATION_SECONDS: '60'
+      VIDEO_LAYOUT: 'split_gameplay'
+      ENABLE_GAMEPLAY: 'true'
+      GAMEPLAY_ROTATION: 'gta5,minecraft,subway_surfers'
+      ENABLE_CAPTIONS: 'true'
+      CAPTION_FONT: 'Arial'
+      CAPTION_FONT_SIZE: '64'
+      CAPTION_HIGHLIGHT_COLORS: '&H0066FF00&,&H0000E6FF&,&H00FFFF00&'
+      VIDEO_CRF: '22'
+      VIDEO_PRESET: 'veryfast'
+      VIDEO_ALLOW_UPSCALE: 'false'
       FREE_LLM_BASE_URL: ${{ secrets.FREE_LLM_BASE_URL || 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1' }}
       FREE_LLM_MODEL: ${{ secrets.FREE_LLM_MODEL || 'Meta-Llama-3_3-70B-Instruct' }}
       FREE_LLM_API_KEY: ${{ secrets.FREE_LLM_API_KEY || '' }}
