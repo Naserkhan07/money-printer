@@ -1,7 +1,13 @@
-# Nixpacks configuration for Railway deployment
 [phases.setup]
-nixPkgs = ["ffmpeg", "nodejs"]
+nixPkgs = ["ffmpeg-full", "nodejs", "fontconfig", "dejavu_fonts"]
+aptPkgs = ["ffmpeg", "fonts-liberation", "fonts-dejavu-core", "fontconfig", "nodejs"]
+
+[phases.install]
+cmds = [
+  "python -m pip install --upgrade pip",
+  "pip install -r requirements.txt",
+  "pip install -e ."
+]
 
 [start]
 cmd = "python main.py"
-
