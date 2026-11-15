@@ -122,6 +122,17 @@ class VideoDownloader:
                 "extractor": cls._retry_delay,
             },
         }
+        proxy = (
+            os.getenv("YOUTUBE_PROXY")
+            or os.getenv("PROXY")
+            or os.getenv("HTTP_PROXY")
+            or os.getenv("HTTPS_PROXY")
+        )
+        if proxy:
+            masked = proxy.split("@")[-1] if "@" in proxy else proxy[:20]
+            logger.info("[downloader] Routing YouTube downloads through proxy: %s", masked)
+            options["proxy"] = proxy
+
         return options
 
     @staticmethod
@@ -164,11 +175,19 @@ class VideoDownloader:
         destination.mkdir(parents=True, exist_ok=True)
         po_token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
         visitor_data = os.getenv("YOUTUBE_VISITOR_DATA") or os.getenv("VISITOR_DATA")
+        proxy = (
+            os.getenv("YOUTUBE_PROXY")
+            or os.getenv("PROXY")
+            or os.getenv("HTTP_PROXY")
+            or os.getenv("HTTPS_PROXY")
+        )
 
         kwargs: dict[str, object] = {}
         if po_token and visitor_data:
             kwargs["use_po_token"] = True
             kwargs["po_token_verifier"] = lambda: (visitor_data, po_token)
+        if proxy:
+            kwargs["proxies"] = {"http": proxy, "https": proxy}
 
         # Prioritize clients that bypass botguard challenges (zero cookies)
         for client in ("VISION_OS", "ANDROID", "TV", "MWEB"):
@@ -205,6 +224,98 @@ class VideoDownloader:
 
         raise DownloadError("YouTube download failed with both yt-dlp and pytubefix.")
 
+    def _download_cobalt(self, url: str, destination: Path) -> SourceVideo:
+        """Fallback to Cobalt API (imputnet/cobalt) stream extraction."""
+        import json
+        import os
+        import httpx
+
+        destination.mkdir(parents=True, exist_ok=True)
+        custom_endpoint = os.getenv("COBALT_API_URL", "").strip()
+        api_key = os.getenv("COBALT_API_KEY", "").strip()
+
+        endpoints: list[str] = []
+        if custom_endpoint:
+            endpoints.append(custom_endpoint)
+        endpoints.extend([
+            "https://cobalt-api.kwiatekm.tokyo",
+            "https://cobalt.canine.tools",
+            "https://cobalt.dimden.dev",
+            "https://cobalt.moe",
+            "https://api.cobalt.tools",
+        ])
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        }
+        if api_key:
+            headers["Authorization"] = f"Api-Key {api_key}"
+
+        payload = {
+            "url": url,
+            "videoQuality": "1080",
+            "downloadMode": "auto",
+        }
+
+        vid_match = re.search(r"[?&]v=([a-zA-Z0-9_-]{11})", url) or re.search(r"youtu\.be/([a-zA-Z0-9_-]{11})", url)
+        vid_id = vid_match.group(1) if vid_match else "unknown"
+
+        proxy = (
+            os.getenv("YOUTUBE_PROXY")
+            or os.getenv("PROXY")
+            or os.getenv("HTTP_PROXY")
+            or os.getenv("HTTPS_PROXY")
+        )
+
+        for ep in endpoints:
+            base_ep = ep.rstrip("/")
+            post_url = f"{base_ep}/" if not base_ep.endswith("/api") else base_ep
+            try:
+                logger.info("[Cobalt] Querying endpoint %s for video %s", base_ep, vid_id)
+                client_kwargs: dict[str, object] = {
+                    "timeout": 25.0,
+                    "follow_redirects": True,
+                }
+                if proxy:
+                    client_kwargs["proxy"] = proxy
+
+                with httpx.Client(**client_kwargs) as client:
+                    resp = client.post(post_url, headers=headers, json=payload)
+                    if resp.status_code not in (200, 201):
+                        logger.warning("[Cobalt] Endpoint %s returned %s: %s", base_ep, resp.status_code, resp.text[:100])
+                        continue
+                    data = resp.json()
+                    status = data.get("status")
+                    stream_url = data.get("url")
+                    if status in ("tunnel", "redirect") and stream_url:
+                        out_path = destination / "source.mp4"
+                        logger.info("[Cobalt] Downloading media stream from %s...", base_ep)
+                        with client.stream("GET", stream_url, timeout=180.0) as stream_resp:
+                            stream_resp.raise_for_status()
+                            with open(out_path, "wb") as f:
+                                for chunk in stream_resp.iter_bytes(chunk_size=65536):
+                                    f.write(chunk)
+
+                        if out_path.exists() and out_path.stat().st_size > 1024:
+                            dur = self._probe_duration_safe(out_path)
+                            title = data.get("filename", f"YouTube Video {vid_id}").rsplit(".", 1)[0]
+                            logger.info("[Cobalt] Successfully downloaded %s (%.1fs)", out_path.name, dur)
+                            return SourceVideo(
+                                path=out_path,
+                                source_url=url,
+                                video_id=vid_id,
+                                title=title,
+                                uploader="YouTube Creator",
+                                duration_seconds=dur,
+                            )
+            except Exception as exc:
+                logger.debug("[Cobalt] Endpoint %s error: %s", base_ep, exc)
+                continue
+
+        raise DownloadError("Cobalt API fallback failed to retrieve media stream.")
+
     def _download_sync(self, url: str, destination: Path) -> SourceVideo:
         destination.mkdir(parents=True, exist_ok=True)
         output_template = str(destination / "source.%(ext)s")
@@ -221,15 +332,26 @@ class VideoDownloader:
             elif "video is unavailable" in detail.casefold() or "this video is unavailable" in detail.casefold() or "private video" in detail.casefold():
                 raise DownloadError(f"Video is unavailable or private on YouTube: {detail}")
 
-            # 2. Fallback: pytubefix Android progressive stream
+            logger.warning("[downloader] yt-dlp failed (%s); trying pytubefix fallback...", detail[:120])
+            # 2. Fallback: pytubefix Android/VisionOS progressive stream
             try:
                 return self._download_pytubefix(url, destination)
-            except Exception:
+            except Exception as pyfix_exc:
+                logger.warning("[downloader] pytubefix failed (%s); trying Cobalt API fallback...", pyfix_exc)
+
+            # 3. Fallback: Cobalt API stream
+            try:
+                return self._download_cobalt(url, destination)
+            except Exception as cobalt_exc:
+                logger.warning("[downloader] Cobalt API fallback failed: %s", cobalt_exc)
                 raise DownloadError(
                     f"YouTube download failed: {self._download_error_detail(detail)}"
                 ) from exc
         except Exception as exc:
-            raise DownloadError(f"Unexpected downloader error: {exc}") from exc
+            try:
+                return self._download_cobalt(url, destination)
+            except Exception:
+                raise DownloadError(f"Unexpected downloader error: {exc}") from exc
 
         candidates = [
             path

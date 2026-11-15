@@ -261,6 +261,14 @@ class GameplayManager:
             "--extractor-args",
             extractor_arg,
         ]
+        proxy = (
+            os.getenv("YOUTUBE_PROXY")
+            or os.getenv("PROXY")
+            or os.getenv("HTTP_PROXY")
+            or os.getenv("HTTPS_PROXY")
+        )
+        if proxy:
+            cmd_base.extend(["--proxy", proxy])
 
         candidate_id: str | None = None
 
@@ -354,9 +362,12 @@ class GameplayManager:
             # pytubefix fallback for this candidate
             try:
                 from pytubefix import YouTube
+                py_kwargs: dict[str, object] = {}
+                if proxy:
+                    py_kwargs["proxies"] = {"http": proxy, "https": proxy}
                 for yt_client in ("ANDROID", "TV"):
                     try:
-                        yt = YouTube(f"https://www.youtube.com/watch?v={try_id}", client=yt_client)
+                        yt = YouTube(f"https://www.youtube.com/watch?v={try_id}", client=yt_client, **py_kwargs)
                         prog = yt.streams.filter(progressive=True).order_by("resolution").desc().first()
                         if prog:
                             prog.download(output_path=str(cat_dir), filename=target_path.name)

@@ -77,6 +77,9 @@ jobs:
       CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || '0BjwQ0SKiNmG__XaV_pYgWWlrbM' }}
       YOUTUBE_PO_TOKEN: ${{ secrets.YOUTUBE_PO_TOKEN }}
       YOUTUBE_VISITOR_DATA: ${{ secrets.YOUTUBE_VISITOR_DATA }}
+      PROXY: ${{ secrets.PROXY || secrets.YOUTUBE_PROXY || '' }}
+      COBALT_API_URL: ${{ secrets.COBALT_API_URL || '' }}
+      COBALT_API_KEY: ${{ secrets.COBALT_API_KEY || '' }}
 
     steps:
       - name: 📥 Checkout Repository
