@@ -18,18 +18,6 @@ _DEPRECATED_GROQ_MODELS = {
     "llama-3.1-8b-instant": _DEFAULT_GROQ_MODEL,
     "llama-3.3-70b-versatile": _DEFAULT_GROQ_MODEL,
 }
-_SUPPORTED_COOKIE_BROWSERS = {
-    "brave",
-    "chrome",
-    "chromium",
-    "edge",
-    "firefox",
-    "opera",
-    "safari",
-    "vivaldi",
-    "whale",
-}
-
 
 def _bool_env(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -92,9 +80,6 @@ class Settings:
     groq_fallback_model: str
     groq_transcription_model: str
     groq_max_transcript_chars: int
-    ytdlp_cookies_from_browser: str
-    ytdlp_browser_profile: str
-    ytdlp_cookie_file: Path | None
     channel_config_file: Path
     youtube_channel_id: str
     youtube_client_secrets_file: Path
@@ -233,9 +218,6 @@ class Settings:
                 "GROQ_TRANSCRIPTION_MODEL", "whisper-large-v3-turbo"
             ).strip(),
             groq_max_transcript_chars=_int_env("GROQ_MAX_TRANSCRIPT_CHARS", 4_000),
-            ytdlp_cookies_from_browser="",
-            ytdlp_browser_profile="",
-            ytdlp_cookie_file=None,
             channel_config_file=channel_config_file,
             youtube_channel_id=(
                 os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
