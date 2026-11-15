@@ -251,7 +251,7 @@ class GameplayManager:
             "-m",
             "yt_dlp",
             "--extractor-args",
-            "youtube:player_client=android,ios",
+            "youtube:player_client=android,ios;player_skip=webpage,configs",
         ]
 
         candidate_id: str | None = None

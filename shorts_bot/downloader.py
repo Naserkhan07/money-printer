@@ -97,6 +97,7 @@ class VideoDownloader:
             "extractor_args": {
                 "youtube": {
                     "player_client": ["android", "ios"],
+                    "player_skip": ["webpage", "configs"],
                 }
             },
             # Current YouTube extraction requires a JS runtime for player challenges.
