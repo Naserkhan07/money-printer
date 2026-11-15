@@ -44,15 +44,8 @@ def extract_youtube_urls(text: str) -> list[str]:
 
 
 class VideoDownloader:
-    def __init__(
-        self,
-        cookies_from_browser: str = "",
-        browser_profile: str = "",
-        cookie_file: Path | None = None,
-    ) -> None:
-        self.cookies_from_browser = cookies_from_browser
-        self.browser_profile = browser_profile
-        self.cookie_file = cookie_file
+    def __init__(self, **_: object) -> None:
+        pass
 
     async def download(self, url: str, destination: Path) -> SourceVideo:
         if not is_youtube_url(url):
@@ -74,9 +67,6 @@ class VideoDownloader:
     def _download_options(
         cls,
         output_template: str,
-        cookies_from_browser: str = "",
-        browser_profile: str = "",
-        cookie_file: Path | None = None,
     ) -> dict[str, object]:
         import shutil
         node_bin = shutil.which("node")
@@ -103,10 +93,10 @@ class VideoDownloader:
             "socket_timeout": 30,
             "http_chunk_size": 10 * 1024 * 1024,
             "concurrent_fragment_downloads": 8,
-            # Mobile app client spoofing (bypasses botguard without cookies)
+            # Mobile app client spoofing (100% cookie-free, bypasses botguard)
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["ios", "tv", "mweb", "web"] if cookie_file else ["android", "ios"],
+                    "player_client": ["android", "ios"],
                 }
             },
             # Current YouTube extraction requires a JS runtime for player challenges.
@@ -121,16 +111,6 @@ class VideoDownloader:
                 "extractor": cls._retry_delay,
             },
         }
-
-        if cookie_file and Path(cookie_file).exists():
-            options["cookiefile"] = str(cookie_file)
-        elif cookies_from_browser:
-            options["cookiesfrombrowser"] = (
-                cookies_from_browser,
-                browser_profile or None,
-                None,
-                None,
-            )
         return options
 
     @staticmethod
@@ -209,13 +189,8 @@ class VideoDownloader:
         destination.mkdir(parents=True, exist_ok=True)
         output_template = str(destination / "source.%(ext)s")
 
-        # 1. Primary attempt: use configured options (with cookies if provided, else mobile client)
-        options = self._download_options(
-            output_template,
-            self.cookies_from_browser,
-            self.browser_profile,
-            self.cookie_file,
-        )
+        # 1. Primary attempt: pure mobile client (100% cookie-free)
+        options = self._download_options(output_template)
         info: dict[str, object] | None = None
         try:
             info = self._extract_info(url, options)
@@ -226,23 +201,13 @@ class VideoDownloader:
             elif "video is unavailable" in detail.casefold() or "this video is unavailable" in detail.casefold() or "private video" in detail.casefold():
                 raise DownloadError(f"Video is unavailable or private on YouTube: {detail}")
 
-            # 2. Secondary attempt: try clean mobile client without cookies
-            if self.cookie_file or self.cookies_from_browser:
-                try:
-                    logger.info("Attempting fallback with cookie-free mobile client for %s", url)
-                    clean_options = self._download_options(output_template)
-                    info = self._extract_info(url, clean_options)
-                except Exception:
-                    info = None
-
-            # 3. Final fallback: pytubefix Android progressive stream
-            if not info:
-                try:
-                    return self._download_pytubefix(url, destination)
-                except Exception:
-                    raise DownloadError(
-                        f"YouTube download failed: {self._download_error_detail(detail)}"
-                    ) from exc
+            # 2. Fallback: pytubefix Android progressive stream
+            try:
+                return self._download_pytubefix(url, destination)
+            except Exception:
+                raise DownloadError(
+                    f"YouTube download failed: {self._download_error_detail(detail)}"
+                ) from exc
         except Exception as exc:
             raise DownloadError(f"Unexpected downloader error: {exc}") from exc
 

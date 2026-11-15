@@ -246,21 +246,13 @@ class GameplayManager:
         term = search_terms.get(category, f"{category} gameplay no copyright 1080p 60fps")
         query = f"ytsearch25:{term}"
 
-        cookie_file = None
-        for cand in [os.environ.get("YTDLP_COOKIE_FILE"), "cookies.txt", "youtube-cookies.txt"]:
-            if cand and Path(cand).exists():
-                cookie_file = cand
-                break
-
         cmd_base = [
             sys.executable,
             "-m",
             "yt_dlp",
             "--extractor-args",
-            "youtube:player_client=ios,tv,mweb,web" if cookie_file else "youtube:player_client=android,ios",
+            "youtube:player_client=android,ios",
         ]
-        if cookie_file:
-            cmd_base.extend(["--cookies", str(cookie_file)])
 
         candidate_id: str | None = None
 

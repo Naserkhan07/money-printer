@@ -101,11 +101,7 @@ class WorkflowServices:
     @classmethod
     def from_settings(cls, settings: Settings, repository: Any = None) -> WorkflowServices:
         return cls(
-            downloader=VideoDownloader(
-                cookies_from_browser=settings.ytdlp_cookies_from_browser,
-                browser_profile=settings.ytdlp_browser_profile,
-                cookie_file=settings.ytdlp_cookie_file,
-            ),
+            downloader=VideoDownloader(),
             media=MediaProcessor(
                 video_layout=settings.video_layout,
                 allow_upscale=settings.video_allow_upscale,

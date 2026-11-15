@@ -225,15 +225,6 @@ class Settings:
                 yt_secrets_file.parent.mkdir(parents=True, exist_ok=True)
                 yt_secrets_file.write_text(raw_secrets.strip(), encoding="utf-8")
 
-        cookie_file_str = os.getenv("YTDLP_COOKIE_FILE", "").strip()
-        if cookie_file_str:
-            c_path = Path(cookie_file_str).expanduser()
-            if not (c_path.is_file() and c_path.stat().st_size > 0):
-                raw_c = os.getenv("YOUTUBE_COOKIES_CONTENT") or os.getenv("YOUTUBE_COOKIES_TXT") or os.getenv("COOKIES_CONTENT")
-                if raw_c and raw_c.strip():
-                    c_path.parent.mkdir(parents=True, exist_ok=True)
-                    c_path.write_text(raw_c.strip(), encoding="utf-8")
-
         settings = cls(
             groq_api_key=os.getenv("GROQ_API_KEY", "").strip(),
             groq_model=_groq_model_env("GROQ_MODEL"),
@@ -242,13 +233,9 @@ class Settings:
                 "GROQ_TRANSCRIPTION_MODEL", "whisper-large-v3-turbo"
             ).strip(),
             groq_max_transcript_chars=_int_env("GROQ_MAX_TRANSCRIPT_CHARS", 4_000),
-            ytdlp_cookies_from_browser=os.getenv("YTDLP_COOKIES_FROM_BROWSER", "").strip().lower(),
-            ytdlp_browser_profile=os.getenv("YTDLP_BROWSER_PROFILE", "").strip(),
-            ytdlp_cookie_file=(
-                Path(os.environ["YTDLP_COOKIE_FILE"].strip()).expanduser()
-                if os.getenv("YTDLP_COOKIE_FILE", "").strip()
-                else None
-            ),
+            ytdlp_cookies_from_browser="",
+            ytdlp_browser_profile="",
+            ytdlp_cookie_file=None,
             channel_config_file=channel_config_file,
             youtube_channel_id=(
                 os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
@@ -489,12 +476,6 @@ class Settings:
             raise ConfigurationError("PENDING_RETRY_JOBS_PER_CYCLE must be between 1 and 20.")
         if not 1 <= self.autopilot_poll_minutes <= 1_440:
             raise ConfigurationError("AUTOPILOT_POLL_MINUTES must be between 1 and 1440.")
-        if (
-            self.ytdlp_cookies_from_browser
-            and self.ytdlp_cookies_from_browser not in _SUPPORTED_COOKIE_BROWSERS
-        ):
-            supported = ", ".join(sorted(_SUPPORTED_COOKIE_BROWSERS))
-            raise ConfigurationError(f"YTDLP_COOKIES_FROM_BROWSER must be one of: {supported}.")
 
     def validate_pipeline(self) -> None:
         if not self.rights_acknowledged:
@@ -504,23 +485,6 @@ class Settings:
             )
         if not self.groq_api_key:
             raise ConfigurationError("GROQ_API_KEY is required for AI clip planning.")
-        if self.ytdlp_cookie_file and not self.ytdlp_cookie_file.exists():
-            raise ConfigurationError(f"YTDLP_COOKIE_FILE was not found: {self.ytdlp_cookie_file}")
-        if self.ytdlp_cookie_file:
-            try:
-                content = self.ytdlp_cookie_file.read_text(encoding="utf-8", errors="ignore")
-                non_empty = [line.strip() for line in content.splitlines() if line.strip()]
-            except OSError as exc:
-                raise ConfigurationError(
-                    f"Could not read YTDLP_COOKIE_FILE: {self.ytdlp_cookie_file}"
-                ) from exc
-            is_netscape = any("netscape" in line.lower() for line in non_empty[:5]) or any(
-                "\t" in raw_line for raw_line in content.splitlines()[:20]
-            )
-            if not is_netscape:
-                raise ConfigurationError(
-                    "YTDLP_COOKIE_FILE must be a Netscape-format cookie export."
-                )
         if self.video_enhancer == "api_market":
             missing = [
                 name
