@@ -76,13 +76,6 @@ class VideoDownloader:
             js_runtimes["node"] = {"path": node_bin}
         js_runtimes["deno"] = {}
 
-        # Log PO Token provider status
-        try:
-            import yt_dlp_plugins.extractor.getpot_bgutil_http  # noqa: F401
-            logger.info("[downloader] yt-dlp PO Token provider plugin (bgutil:http) is active on 127.0.0.1:4416")
-        except ImportError:
-            pass
-
         yt_args: dict[str, object] = {
             "player_client": ["android", "ios", "mweb", "web"],
         }
