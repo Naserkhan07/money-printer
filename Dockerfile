@@ -26,3 +26,4 @@ COPY . .
 RUN pip install --no-cache-dir -e .
 
 CMD ["python", "main.py"]
+

@@ -103,11 +103,10 @@ class VideoDownloader:
             "socket_timeout": 30,
             "http_chunk_size": 10 * 1024 * 1024,
             "concurrent_fragment_downloads": 8,
-            # Bypass web botguard challenges completely by skipping webpage HTML and using mobile clients
+            # Mobile app client spoofing (bypasses botguard without cookies)
             "extractor_args": {
                 "youtube": {
                     "player_client": ["ios", "tv", "mweb", "web"] if cookie_file else ["android", "ios"],
-                    "player_skip": ["webpage", "configs"],
                 }
             },
             # Current YouTube extraction requires a JS runtime for player challenges.
