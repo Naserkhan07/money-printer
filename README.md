@@ -301,7 +301,7 @@ money-printer/
 │   ├── spool.py                # Local queue/ dropzone watcher
 │   └── youtube.py              # YouTube Data API v3 publisher
 ├── .github/workflows/
-│   └── money-printer.yml       # Autonomous 24/7 GitHub Actions Cloud Workflow
+│   └── autopilot.yml           # Autonomous 24/7 GitHub Actions Cloud Workflow
 ├── .env.example                # Safe environment variable template
 ├── channels.toml               # Creator channels list & scheduling settings
 ├── dashboard.py                # Dashboard runner
