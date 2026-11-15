@@ -75,6 +75,8 @@ jobs:
       CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'Root' }}
       CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || '576862343758742' }}
       CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || '0BjwQ0SKiNmG__XaV_pYgWWlrbM' }}
+      YOUTUBE_PO_TOKEN: ${{ secrets.YOUTUBE_PO_TOKEN }}
+      YOUTUBE_VISITOR_DATA: ${{ secrets.YOUTUBE_VISITOR_DATA }}
 
     steps:
       - name: 📥 Checkout Repository
@@ -99,6 +101,12 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
           pip install -e .
+
+      - name: 🛡️ Launch PO Token Provider Container (Docker)
+        run: |
+          docker run --name bgutil-provider -d --restart always -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider || true
+          sleep 4
+          curl -s http://127.0.0.1:4416/ping || true
 
       - name: 💾 Cache Gameplay Video Footage
         uses: actions/cache@v4

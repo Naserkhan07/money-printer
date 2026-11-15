@@ -68,12 +68,32 @@ class VideoDownloader:
         cls,
         output_template: str,
     ) -> dict[str, object]:
+        import os
         import shutil
         node_bin = shutil.which("node")
         js_runtimes: dict[str, object] = {}
         if node_bin:
             js_runtimes["node"] = {"path": node_bin}
         js_runtimes["deno"] = {}
+
+        # Log PO Token provider status
+        try:
+            import yt_dlp_plugins.extractor.getpot_bgutil_http  # noqa: F401
+            logger.info("[downloader] yt-dlp PO Token provider plugin (bgutil:http) is active on 127.0.0.1:4416")
+        except ImportError:
+            pass
+
+        yt_args: dict[str, object] = {
+            "player_client": ["android", "ios", "mweb", "web"],
+        }
+        po_token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
+        visitor_data = os.getenv("YOUTUBE_VISITOR_DATA") or os.getenv("VISITOR_DATA")
+        if po_token:
+            logger.info("[downloader] Using configured PO Token from environment")
+            yt_args["po_token"] = [po_token]
+        if visitor_data:
+            logger.info("[downloader] Using configured Visitor Data from environment")
+            yt_args["visitor_data"] = [visitor_data]
 
         options: dict[str, object] = {
             # Prefer 1080p max, fall back to progressive stream (e.g. 18) when adaptive streams are restricted
@@ -93,12 +113,9 @@ class VideoDownloader:
             "socket_timeout": 30,
             "http_chunk_size": 10 * 1024 * 1024,
             "concurrent_fragment_downloads": 8,
-            # Mobile app client spoofing (100% cookie-free, bypasses botguard)
+            # Mobile app client spoofing + PO Token plugin support (100% cookie-free)
             "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "ios"],
-                    "player_skip": ["webpage", "configs"],
-                }
+                "youtube": yt_args,
             },
             # Current YouTube extraction requires a JS runtime for player challenges.
             "js_runtimes": js_runtimes,
@@ -148,13 +165,22 @@ class VideoDownloader:
             return 60.0
 
     def _download_pytubefix(self, url: str, destination: Path) -> SourceVideo:
+        import os
         from pytubefix import YouTube
 
         destination.mkdir(parents=True, exist_ok=True)
-        # Prioritize ANDROID client progressive streams which bypass botguard challenges (zero cookies)
-        for client in ("ANDROID", "TV", "MWEB"):
+        po_token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
+        visitor_data = os.getenv("YOUTUBE_VISITOR_DATA") or os.getenv("VISITOR_DATA")
+
+        kwargs: dict[str, object] = {}
+        if po_token and visitor_data:
+            kwargs["use_po_token"] = True
+            kwargs["po_token_verifier"] = lambda: (visitor_data, po_token)
+
+        # Prioritize clients that bypass botguard challenges (zero cookies)
+        for client in ("VISION_OS", "ANDROID", "TV", "MWEB"):
             try:
-                yt = YouTube(url, client=client)
+                yt = YouTube(url, client=client, **kwargs)
                 title = yt.title or "Untitled video"
                 duration = float(yt.length or 0)
                 uploader = yt.author or "Unknown creator"

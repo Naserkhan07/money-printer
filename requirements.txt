@@ -8,4 +8,6 @@ python-dotenv>=1.0,<2
 pytubefix>=11.2
 yt-dlp[curl-cffi,default,deno]>=2026.7.4
 yt-dlp-ejs>=0.8,<1
+yt-dlp-get-pot>=0.2
+bgutil-ytdlp-pot-provider>=0.7
 

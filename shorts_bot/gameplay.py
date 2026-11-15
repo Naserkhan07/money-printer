@@ -246,12 +246,20 @@ class GameplayManager:
         term = search_terms.get(category, f"{category} gameplay no copyright 1080p 60fps")
         query = f"ytsearch25:{term}"
 
+        po_token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
+        visitor_data = os.getenv("YOUTUBE_VISITOR_DATA") or os.getenv("VISITOR_DATA")
+        extractor_arg = "youtube:player_client=android,ios,mweb,web"
+        if po_token:
+            extractor_arg += f";po_token={po_token}"
+        if visitor_data:
+            extractor_arg += f";visitor_data={visitor_data}"
+
         cmd_base = [
             sys.executable,
             "-m",
             "yt_dlp",
             "--extractor-args",
-            "youtube:player_client=android,ios;player_skip=webpage,configs",
+            extractor_arg,
         ]
 
         candidate_id: str | None = None
