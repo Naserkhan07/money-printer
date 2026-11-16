@@ -154,6 +154,15 @@ class WorkflowServices:
                     user_id=settings.instagram_user_id,
                     access_token=settings.instagram_access_token,
                     api_version=settings.instagram_graph_api_version,
+                    temporary_host=(
+                        CloudinaryTemporaryVideoHost(
+                            cloud_name=settings.cloudinary_cloud_name,
+                            api_key=settings.cloudinary_api_key,
+                            api_secret=settings.cloudinary_api_secret,
+                        )
+                        if settings.cloudinary_cloud_name and settings.cloudinary_api_key
+                        else None
+                    ),
                 )
                 if settings.upload_instagram
                 else None

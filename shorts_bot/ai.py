@@ -637,15 +637,32 @@ def _completion_request(
 
 def _parse_json_object(content: str) -> dict[str, Any]:
     cleaned = content.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    if fence_match:
+        try:
+            payload = json.loads(fence_match.group(1))
+            if isinstance(payload, dict):
+                return payload
+        except json.JSONDecodeError:
+            pass
+
     try:
         payload = json.loads(cleaned)
         if isinstance(payload, dict):
             return payload
     except json.JSONDecodeError:
         pass
+
+    first_brace = cleaned.find("{")
+    last_brace = cleaned.rfind("}")
+    if first_brace != -1 and last_brace > first_brace:
+        snippet = cleaned[first_brace : last_brace + 1]
+        try:
+            payload = json.loads(snippet)
+            if isinstance(payload, dict):
+                return payload
+        except json.JSONDecodeError:
+            pass
 
     decoder = json.JSONDecoder()
     for match in re.finditer(r"\{", cleaned):

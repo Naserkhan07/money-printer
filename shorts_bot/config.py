@@ -381,7 +381,7 @@ class Settings:
             ),
             scheduler_enabled=_bool_env(
                 "SCHEDULER_ENABLED",
-                bool(scheduler_section.get("enabled", True)),
+                False,
             ),
             scheduler_advance_prep_minutes=int(
                 os.getenv("SCHEDULER_ADVANCE_PREP_MINUTES")

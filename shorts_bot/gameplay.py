@@ -319,18 +319,16 @@ class GameplayManager:
         if visitor_data:
             extractor_arg += f";visitor_data={visitor_data}"
 
-        extractor_args_list = [extractor_arg]
-        pot_provider_url = os.getenv("PO_TOKEN_PROVIDER_URL", "http://127.0.0.1:4416").rstrip("/")
-        if pot_provider_url:
-            extractor_args_list.append(f"youtubepot-bgutilhttp:base_url={pot_provider_url}")
-
         cmd_base = [
             sys.executable,
             "-m",
             "yt_dlp",
             "--extractor-args",
-            ";".join(extractor_args_list),
+            extractor_arg,
         ]
+        pot_provider_url = os.getenv("PO_TOKEN_PROVIDER_URL", "http://127.0.0.1:4416").rstrip("/")
+        if pot_provider_url:
+            cmd_base.extend(["--extractor-args", f"youtubepot-bgutilhttp:base_url={pot_provider_url}"])
         if cookie_file:
             cmd_base.extend(["--cookies", cookie_file])
 
@@ -400,7 +398,7 @@ class GameplayManager:
             dl_cmd = cmd_base + [
                 f"https://www.youtube.com/watch?v={try_id}",
                 "-f",
-                "best[height<=720][ext=mp4]/best[ext=mp4]/best",
+                "22/18/best[height<=720][ext=mp4]/best[ext=mp4]/best",
                 "--max-filesize",
                 "80M",
                 "--no-playlist",

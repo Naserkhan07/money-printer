@@ -25,6 +25,7 @@ class InstagramUploader:
         processing_timeout_seconds: int = 600,
         upload_retry_attempts: int = 4,
         transport: httpx.AsyncBaseTransport | None = None,
+        temporary_host: Any | None = None,
     ) -> None:
         self.user_id = user_id
         self.access_token = access_token
@@ -33,6 +34,7 @@ class InstagramUploader:
         self.processing_timeout_seconds = processing_timeout_seconds
         self.upload_retry_attempts = max(1, upload_retry_attempts)
         self.transport = transport
+        self.temporary_host = temporary_host
         self.graph_base = f"https://graph.facebook.com/{api_version}"
 
     async def check_connection(self) -> str:
@@ -59,6 +61,56 @@ class InstagramUploader:
             raise UploadError(f"Rendered video does not exist: {video_path}")
 
         timeout = httpx.Timeout(120, read=900)
+
+        # 1. Prefer hosted URL upload if temporary host (Cloudinary) is available
+        if self.temporary_host:
+            public_id = f"ig_{video_path.stem}"
+            stored_id = None
+            try:
+                logger.info("[Instagram] Uploading to temporary Cloudinary host for reliable URL publishing...")
+                video_url, stored_id = await self.temporary_host.upload(video_path, public_id)
+                logger.info("[Instagram] Temporary video URL ready. Creating Instagram Reel container...")
+                async with httpx.AsyncClient(timeout=timeout, transport=self.transport) as client:
+                    container = await self._post_json(
+                        client,
+                        f"{self.graph_base}/{self.user_id}/media",
+                        data={
+                            "media_type": "REELS",
+                            "video_url": video_url,
+                            "caption": plan.instagram_caption or plan.description[:2200],
+                            "share_to_feed": "true",
+                            "thumb_offset": str(int(plan.duration_seconds * 500)),
+                            "access_token": self.access_token,
+                        },
+                    )
+                    container_id = str(container.get("id") or "")
+                    if container_id:
+                        await self._wait_until_ready(client, container_id)
+                        published = await self._post_json(
+                            client,
+                            f"{self.graph_base}/{self.user_id}/media_publish",
+                            data={
+                                "creation_id": container_id,
+                                "access_token": self.access_token,
+                            },
+                        )
+                        media_id = str(published.get("id") or "")
+                        if media_id:
+                            permalink = await self._get_permalink(client, media_id)
+                            return InstagramUploadResult(media_id=media_id, permalink=permalink)
+            except Exception as exc:
+                logger.warning(
+                    "[Instagram] Cloudinary video URL publishing encountered an issue (%s); "
+                    "falling back to resumable direct binary upload.", exc
+                )
+            finally:
+                if stored_id:
+                    try:
+                        await self.temporary_host.delete(stored_id)
+                    except Exception:
+                        pass
+
+        # 2. Resumable direct binary upload fallback
         async with httpx.AsyncClient(timeout=timeout, transport=self.transport) as client:
             container = await self._post_json(
                 client,
@@ -109,7 +161,7 @@ class InstagramUploader:
                         upload_uri,
                         headers={
                             "Authorization": f"OAuth {self.access_token}",
-                            "Content-Type": "video/mp4",
+                            "Content-Type": "application/octet-stream",
                             "offset": "0",
                             "file_size": str(file_size),
                         },
@@ -219,17 +271,21 @@ class InstagramUploader:
             payload = response.json()
             error = payload.get("error", {}) if isinstance(payload, dict) else {}
             if isinstance(error, dict):
-                detail = str(error.get("error_user_msg") or error.get("message") or detail)
+                detail = str(error.get("error_user_msg") or error.get("message") or "")
                 code = int(error.get("code") or 0)
-            if detail == f"HTTP {response.status_code}" and isinstance(payload, dict):
-                detail = str(payload.get("message") or payload.get("error_msg") or detail)
+            if not detail and isinstance(payload, dict):
+                detail = str(payload.get("message") or payload.get("error_msg") or "")
         except (ValueError, TypeError, AttributeError):
+            pass
+        if not detail or detail == f"HTTP {response.status_code}":
             if response.status_code == 408:
                 detail = "HTTP 408 Request Timeout from Meta's upload server"
             else:
                 body = response.text.strip()
                 if body:
                     detail = f"HTTP {response.status_code}: {body[:500]}"
+                else:
+                    detail = f"HTTP {response.status_code}"
         normalized = detail.casefold()
         if response.status_code == 429:
             raise UploadLimitError("Instagram", detail)
