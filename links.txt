@@ -2,12 +2,24 @@
 # A URL is removed atomically as soon as that video has downloaded successfully.
 # Downloaded URLs are recorded in work/downloaded-links.log.
 # [Autopilot: IShowSpeed] CLICK THIS STREAM IF YOU WANT GTA 6!
+# [Autopilot: BeastBoyShub] the final boss move set will make you cry
+https://www.youtube.com/watch?v=opHsKwWq7OU
+# [Autopilot: GothamChess] INSANE WORLD 1 RANKING DRAMA
+https://www.youtube.com/watch?v=Nql_x5vYaP4
+# [Autopilot: Dream] Stripped Logs
+https://www.youtube.com/watch?v=iSwIiTNVvWo
+# [Autopilot: Not Your Type] Every Indian Street Food Ever !
+https://www.youtube.com/watch?v=7Wi38uVsW98
+# [Autopilot: HardToonz] School Annual Function| Scary Indian High School | EP 06 | HardToonz
+https://www.youtube.com/watch?v=eHQWaFDZvn4
+# [Autopilot: Samay Raina] INDIA’S GOT LATENT S2 EP9 ft. Raftaar, Balraj Ghai, Sahil Kale
+https://www.youtube.com/watch?v=CswOUBuokjo
 # [Autopilot: CarryMinati] PODCAST OF THE DECADE🥵| CARRYMINATI
 https://www.youtube.com/watch?v=tg2MwT5FPdY
-# [Autopilot: Warangal Diaries] Sardiyan Hogaye Shuru | Hyderabadi Comedy | Warangal Diaries
-https://www.youtube.com/watch?v=nZsz-1FWB2I
-# [Autopilot: DiscoveryChannelInd] Family Feuds & Gold Mining Rivalries | Gold Rush S3 & S6 | Discovery Channel India
-https://www.youtube.com/watch?v=stm4nMKyhMo
+# [Autopilot: Warangal Diaries] GHAR DAMAD Ki Kahani (Part-2) | Warangal Diaries Comedy
+https://www.youtube.com/watch?v=WA6HGLDKM5s
+# [Autopilot: DiscoveryChannelInd] Final Evidence & Case Breakthroughs | Expedition X S1, S2, S3 & S4 | Discovery Channel India
+https://www.youtube.com/watch?v=nJbu8UjG1DQ
 # [Autopilot: Shakeel Bhai] GORDAN RAMSAY X SHAKEEL BHAI EP01
 https://www.youtube.com/watch?v=2fXOQK5LHwA
 # [Autopilot: Grox] 100 Villagers Vs. Gorilla
@@ -18,7 +30,3 @@ https://www.youtube.com/watch?v=5hG_nAYEC2g
 https://www.youtube.com/watch?v=ZT-k42SC7L0
 # [Autopilot: Donut] Junkyard Beetle vs Offroad Whoops
 https://www.youtube.com/watch?v=tgxcWi4JOfM
-# [Autopilot: Warangal Diaries] GHAR DAMAD Ki Kahani (Part-2) | Warangal Diaries Comedy
-https://www.youtube.com/watch?v=WA6HGLDKM5s
-# [Autopilot: DiscoveryChannelInd] Jungle Ho Ya Registaan, Bear Ka Food Hunt Hai Zabardast! | Man vs. Wild S3 | Discovery Channel India
-https://www.youtube.com/watch?v=joD6HIoFfVY
