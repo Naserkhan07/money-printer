@@ -79,6 +79,7 @@ class AIPlanner:
         self.free_llm_model = (
             free_llm_model or "Meta-Llama-3_3-70B-Instruct"
         ).strip()
+        self._rate_limited_models: set[str] = set()
 
     async def _query_free_llm(
         self,
@@ -402,17 +403,15 @@ Hashtags and source credit are added by the application.
         max_tokens: int = 500,
         system_prompt: str = _SYSTEM_PROMPT,
     ) -> dict[str, Any]:
-        models = [self.model]
-        if self.fallback_model and self.fallback_model not in models:
-            models.append(self.fallback_model)
-        for backup_model in ("openai/gpt-oss-120b", "openai/gpt-oss-20b"):
-            if backup_model not in models:
-                models.append(backup_model)
+        candidate_models = [self.model]
+        if self.fallback_model and self.fallback_model not in candidate_models:
+            candidate_models.append(self.fallback_model)
+        models = [m for m in candidate_models if m and m not in self._rate_limited_models]
 
         last_rate_limit: RateLimitError | None = None
         token_budgets = [max_tokens]
 
-        if self.client:
+        if self.client and models:
             for model in models:
                 for token_budget in token_budgets:
                     try:
@@ -431,7 +430,15 @@ Hashtags and source credit are added by the application.
                         return _parse_json_object(content)
                     except RateLimitError as exc:
                         last_rate_limit = exc
-                        logger.warning("Groq model %s rate limited (%s); trying Free LLM API fallback.", model, exc)
+                        err_str = str(exc).lower()
+                        if "tokens per day" in err_str or "tpd" in err_str or "rate limit reached" in err_str:
+                            self._rate_limited_models.add(model)
+                            logger.warning(
+                                "Groq model %s daily token limit (TPD) reached. Skipping Groq and using fallback for remainder of session.",
+                                model,
+                            )
+                        else:
+                            logger.warning("Groq model %s rate limited (%s); trying fallback.", model, exc)
                         break
                     except APIStatusError as exc:
                         detail = str(exc).lower()

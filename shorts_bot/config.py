@@ -14,7 +14,7 @@ from .errors import ConfigurationError
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off", ""}
 _DEFAULT_GROQ_MODEL = "qwen/qwen3.8-27b"
-_DEFAULT_GROQ_FALLBACK_MODEL = "openai/gpt-oss-120b"
+_DEFAULT_GROQ_FALLBACK_MODEL = "qwen/qwen3.8-27b"
 _DEPRECATED_GROQ_MODELS = {
     "llama-3.1-8b-instant": _DEFAULT_GROQ_MODEL,
     "llama-3.3-70b-versatile": _DEFAULT_GROQ_MODEL,
@@ -377,20 +377,23 @@ class Settings:
                 or os.getenv("LLM_BASE_URL")
                 or os.getenv("OPENAI_BASE_URL")
                 or _nested_string(channel_config, "ai", "base_url")
-                or "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"
+                or ("https://generativelanguage.googleapis.com/v1beta/openai/" if (os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()) else "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1")
             ).strip(),
             freellmapi_api_key=str(
                 os.getenv("FREE_LLM_API_KEY")
                 or os.getenv("FREELLMAPI_API_KEY")
                 or os.getenv("LLM_API_KEY")
+                or os.getenv("GEMINI_API_KEY", "").strip()
+                or os.getenv("GOOGLE_API_KEY", "").strip()
                 or _nested_string(channel_config, "free_llm", "api_key")
             ).strip(),
             freellmapi_model=str(
                 os.getenv("FREE_LLM_MODEL")
                 or os.getenv("FREELLMAPI_MODEL")
                 or os.getenv("LLM_MODEL")
+                or os.getenv("GEMINI_MODEL")
                 or _nested_string(channel_config, "free_llm", "model")
-                or "Meta-Llama-3_3-70B-Instruct"
+                or ("gemini-2.5-flash" if (os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()) else "Meta-Llama-3_3-70B-Instruct")
             ).strip(),
         )
         settings.validate_common()
