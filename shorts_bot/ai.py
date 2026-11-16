@@ -155,7 +155,10 @@ class AIPlanner:
             except Exception as exc:
                 logger.warning("Groq check notice: %s", exc)
 
-        free_llm_status = f"Free LLM ready ({self.free_llm_model} @ {self.free_llm_base_url})"
+        if "googleapis.com" in self.free_llm_base_url or "gemini" in self.free_llm_model.lower():
+            free_llm_status = f"Gemini ready ({self.free_llm_model})"
+        else:
+            free_llm_status = f"Free LLM ready ({self.free_llm_model} @ {self.free_llm_base_url})"
         if groq_ok:
             return f"{self.model} (+{free_llm_status})", self.transcription_model
         return free_llm_status, self.transcription_model

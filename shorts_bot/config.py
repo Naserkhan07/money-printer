@@ -211,6 +211,43 @@ class Settings:
                 yt_secrets_file.parent.mkdir(parents=True, exist_ok=True)
                 yt_secrets_file.write_text(raw_secrets.strip(), encoding="utf-8")
 
+        gemini_api_key = (
+            os.getenv("GEMINI_API_KEY", "").strip()
+            or os.getenv("GOOGLE_API_KEY", "").strip()
+        )
+        env_freellm_url = (
+            os.getenv("FREE_LLM_BASE_URL")
+            or os.getenv("FREELLMAPI_URL")
+            or os.getenv("LLM_BASE_URL")
+            or os.getenv("OPENAI_BASE_URL")
+            or _nested_string(channel_config, "ai", "base_url")
+            or ""
+        ).strip()
+        env_freellm_key = (
+            os.getenv("FREE_LLM_API_KEY")
+            or os.getenv("FREELLMAPI_API_KEY")
+            or os.getenv("LLM_API_KEY")
+            or _nested_string(channel_config, "free_llm", "api_key")
+            or ""
+        ).strip()
+        env_freellm_model = (
+            os.getenv("FREE_LLM_MODEL")
+            or os.getenv("FREELLMAPI_MODEL")
+            or os.getenv("LLM_MODEL")
+            or _nested_string(channel_config, "free_llm", "model")
+            or ""
+        ).strip()
+
+        is_default_ovh = not env_freellm_url or "kepler.ai.cloud.ovh.net" in env_freellm_url
+        if gemini_api_key and is_default_ovh:
+            resolved_freellm_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+            resolved_freellm_key = gemini_api_key
+            resolved_freellm_model = os.getenv("GEMINI_MODEL", "").strip() or "gemini-2.5-flash"
+        else:
+            resolved_freellm_url = env_freellm_url or "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"
+            resolved_freellm_key = env_freellm_key or gemini_api_key
+            resolved_freellm_model = env_freellm_model or ("gemini-2.5-flash" if gemini_api_key else "Meta-Llama-3_3-70B-Instruct")
+
         settings = cls(
             groq_api_key=os.getenv("GROQ_API_KEY", "").strip(),
             groq_model=_groq_model_env("GROQ_MODEL", _DEFAULT_GROQ_MODEL),
@@ -371,30 +408,9 @@ class Settings:
                 or os.getenv("UPLOADS_PER_SLOT")
                 or 3
             ),
-            freellmapi_url=str(
-                os.getenv("FREE_LLM_BASE_URL")
-                or os.getenv("FREELLMAPI_URL")
-                or os.getenv("LLM_BASE_URL")
-                or os.getenv("OPENAI_BASE_URL")
-                or _nested_string(channel_config, "ai", "base_url")
-                or ("https://generativelanguage.googleapis.com/v1beta/openai/" if (os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()) else "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1")
-            ).strip(),
-            freellmapi_api_key=str(
-                os.getenv("FREE_LLM_API_KEY")
-                or os.getenv("FREELLMAPI_API_KEY")
-                or os.getenv("LLM_API_KEY")
-                or os.getenv("GEMINI_API_KEY", "").strip()
-                or os.getenv("GOOGLE_API_KEY", "").strip()
-                or _nested_string(channel_config, "free_llm", "api_key")
-            ).strip(),
-            freellmapi_model=str(
-                os.getenv("FREE_LLM_MODEL")
-                or os.getenv("FREELLMAPI_MODEL")
-                or os.getenv("LLM_MODEL")
-                or os.getenv("GEMINI_MODEL")
-                or _nested_string(channel_config, "free_llm", "model")
-                or ("gemini-2.5-flash" if (os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()) else "Meta-Llama-3_3-70B-Instruct")
-            ).strip(),
+            freellmapi_url=resolved_freellm_url,
+            freellmapi_api_key=resolved_freellm_key,
+            freellmapi_model=resolved_freellm_model,
         )
         settings.validate_common()
         return settings
