@@ -103,7 +103,11 @@ async def get_system_health(settings: Settings | None = None) -> dict[str, Any]:
             results["services"]["facebook"] = {"status": "disabled"}
 
         # Cloudinary
-        if settings.cloudinary_cloud_name and settings.cloudinary_api_key:
+        if (
+            settings.cloudinary_cloud_name
+            and settings.cloudinary_cloud_name.lower() != "root"
+            and settings.cloudinary_api_key
+        ):
             results["services"]["cloudinary"] = {
                 "status": "configured",
                 "cloud_name": settings.cloudinary_cloud_name,

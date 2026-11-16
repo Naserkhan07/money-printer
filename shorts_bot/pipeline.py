@@ -160,7 +160,9 @@ class WorkflowServices:
                             api_key=settings.cloudinary_api_key,
                             api_secret=settings.cloudinary_api_secret,
                         )
-                        if settings.cloudinary_cloud_name and settings.cloudinary_api_key
+                        if settings.cloudinary_cloud_name
+                        and settings.cloudinary_cloud_name.lower() != "root"
+                        and settings.cloudinary_api_key
                         else None
                     ),
                 )

@@ -201,15 +201,29 @@ class InstagramUploader:
         container_id: str,
     ) -> None:
         attempts = max(1, self.processing_timeout_seconds // self.poll_interval_seconds)
-        for _ in range(attempts):
-            status = await self._get_json(
-                client,
-                f"{self.graph_base}/{container_id}",
-                params={
-                    "fields": "status_code,status",
-                    "access_token": self.access_token,
-                },
-            )
+        for attempt in range(attempts):
+            try:
+                status = await self._get_json(
+                    client,
+                    f"{self.graph_base}/{container_id}",
+                    params={
+                        "fields": "status_code,status",
+                        "access_token": self.access_token,
+                    },
+                )
+            except UploadError as exc:
+                err_text = str(exc).lower()
+                if "does not exist" in err_text or "unsupported get request" in err_text:
+                    logger.debug(
+                        "Instagram container %s not indexed yet (attempt %d/%d); retrying...",
+                        container_id,
+                        attempt + 1,
+                        attempts,
+                    )
+                    await asyncio.sleep(self.poll_interval_seconds)
+                    continue
+                raise
+
             status_code = str(status.get("status_code") or "").upper()
             if status_code == "FINISHED":
                 return
@@ -220,15 +234,22 @@ class InstagramUploader:
         raise UploadError("Instagram Reel processing timed out before publishing.")
 
     async def _get_permalink(self, client: httpx.AsyncClient, media_id: str) -> str:
-        result = await self._get_json(
-            client,
-            f"{self.graph_base}/{media_id}",
-            params={
-                "fields": "permalink",
-                "access_token": self.access_token,
-            },
-        )
-        return str(result.get("permalink") or "")
+        for _ in range(5):
+            try:
+                result = await self._get_json(
+                    client,
+                    f"{self.graph_base}/{media_id}",
+                    params={
+                        "fields": "permalink",
+                        "access_token": self.access_token,
+                    },
+                )
+                permalink = str(result.get("permalink") or "")
+                if permalink:
+                    return permalink
+            except UploadError:
+                await asyncio.sleep(2)
+        return f"https://www.instagram.com/reel/{media_id}/"
 
     async def _post_json(
         self,

@@ -74,9 +74,9 @@ jobs:
       INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID || '17841432791787477' }}
       FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID || '1231108530089378' }}
       FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
-      CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'Root' }}
-      CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || '576862343758742' }}
-      CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || '0BjwQ0SKiNmG__XaV_pYgWWlrbM' }}
+      CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || '' }}
+      CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || '' }}
+      CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || '' }}
       YOUTUBE_PO_TOKEN: ${{ secrets.YOUTUBE_PO_TOKEN }}
       YOUTUBE_VISITOR_DATA: ${{ secrets.YOUTUBE_VISITOR_DATA }}
       PO_TOKEN_PROVIDER_URL: 'http://127.0.0.1:4416'
@@ -123,10 +123,12 @@ jobs:
           restore-keys: |
             gameplay-footage-
 
-      - name: 💾 Restore Database Cache
+      - name: 💾 Restore Database & Jobs Cache
         uses: actions/cache@v4
         with:
-          path: work/jobs.db
+          path: |
+            work/jobs.db
+            work/jobs
           key: jobs-db-${{ github.run_id }}
           restore-keys: |
             jobs-db-
@@ -176,6 +178,14 @@ jobs:
         if: always()
         run: |
           python dashboard.py --summary >> $GITHUB_STEP_SUMMARY || true
+
+      - name: 📦 Upload Pending Uploads Artifacts (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pending-shorts
+          path: work/pending_uploads/
+          if-no-files-found: ignore
 
       - name: 💾 Commit Updated Download Ledger & Queue
         if: always()

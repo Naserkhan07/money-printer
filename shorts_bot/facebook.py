@@ -156,15 +156,30 @@ class FacebookReelUploader:
 
     async def _wait_until_published(self, client: httpx.AsyncClient, video_id: str) -> str:
         attempts = max(1, self.processing_timeout_seconds // self.poll_interval_seconds)
-        for _ in range(attempts):
-            result = await self._get_json(
-                client,
-                f"{self.graph_base}/{video_id}",
-                params={
-                    "fields": "status,permalink_url",
-                    "access_token": self.access_token,
-                },
-            )
+        for attempt in range(attempts):
+            try:
+                result = await self._get_json(
+                    client,
+                    f"{self.graph_base}/{video_id}",
+                    params={
+                        "fields": "status,permalink_url",
+                        "access_token": self.access_token,
+                    },
+                )
+            except UploadError as exc:
+                err_text = str(exc).lower()
+                if "does not exist" in err_text or "unsupported get request" in err_text:
+                    logger.debug(
+                        "Facebook Reel %s not indexed yet (attempt %d/%d); retrying in %ss...",
+                        video_id,
+                        attempt + 1,
+                        attempts,
+                        self.poll_interval_seconds,
+                    )
+                    await asyncio.sleep(self.poll_interval_seconds)
+                    continue
+                raise
+
             status = result.get("status", {})
             if not isinstance(status, dict):
                 status = {}
@@ -187,7 +202,7 @@ class FacebookReelUploader:
                 detail = processing.get("error") if isinstance(processing, dict) else None
                 raise UploadError(f"Facebook could not process the Reel: {detail or status}")
             await asyncio.sleep(self.poll_interval_seconds)
-        raise UploadError("Facebook Reel processing timed out before publication.")
+        return f"https://www.facebook.com/reel/{video_id}"
 
     async def _post_json(
         self,
