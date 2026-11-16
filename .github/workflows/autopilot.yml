@@ -185,20 +185,11 @@ jobs:
         with:
           name: pending-shorts
           path: work/pending_uploads/
+          retention-days: 3
           if-no-files-found: ignore
 
-      - name: 💾 Commit Updated Download Ledger & Queue
+      - name: 💾 Sync Updated Download Ledger & Queue
         if: always()
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          touch work/downloaded-links.log
-          git add -f links.txt work/downloaded-links.log || true
-          if git diff --staged --quiet; then
-            echo "No queue changes to commit."
-          else
-            git commit -m "chore(autopilot): update links queue & download audit ledger [skip ci]"
-            git pull --rebase origin main || true
-            git push origin main
-          fi
+          python -m shorts_bot.sync_ledger
 
