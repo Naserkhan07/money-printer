@@ -2,6 +2,7 @@
 # A URL is removed atomically as soon as that video has downloaded successfully.
 # Downloaded URLs are recorded in work/downloaded-links.log.
 # [Autopilot: IShowSpeed] CLICK THIS STREAM IF YOU WANT GTA 6!
+https://www.youtube.com/watch?v=o0UeucVxYCA
 # [Autopilot: BeastBoyShub] the final boss move set will make you cry
 https://www.youtube.com/watch?v=opHsKwWq7OU
 # [Autopilot: GothamChess] INSANE WORLD 1 RANKING DRAMA
