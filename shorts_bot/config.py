@@ -14,6 +14,7 @@ from .errors import ConfigurationError
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off", ""}
 _DEFAULT_GROQ_MODEL = "qwen/qwen3.8-27b"
+_DEFAULT_GROQ_FALLBACK_MODEL = "openai/gpt-oss-120b"
 _DEPRECATED_GROQ_MODELS = {
     "llama-3.1-8b-instant": _DEFAULT_GROQ_MODEL,
     "llama-3.3-70b-versatile": _DEFAULT_GROQ_MODEL,
@@ -51,8 +52,8 @@ def _float_env(name: str, default: float) -> float:
         raise ConfigurationError(f"{name} must be a number.") from exc
 
 
-def _groq_model_env(name: str) -> str:
-    configured = os.getenv(name, _DEFAULT_GROQ_MODEL).strip()
+def _groq_model_env(name: str, default: str = _DEFAULT_GROQ_MODEL) -> str:
+    configured = os.getenv(name, default).strip()
     return _DEPRECATED_GROQ_MODELS.get(configured, configured)
 
 
@@ -212,8 +213,8 @@ class Settings:
 
         settings = cls(
             groq_api_key=os.getenv("GROQ_API_KEY", "").strip(),
-            groq_model=_groq_model_env("GROQ_MODEL"),
-            groq_fallback_model=_groq_model_env("GROQ_FALLBACK_MODEL"),
+            groq_model=_groq_model_env("GROQ_MODEL", _DEFAULT_GROQ_MODEL),
+            groq_fallback_model=_groq_model_env("GROQ_FALLBACK_MODEL", _DEFAULT_GROQ_FALLBACK_MODEL),
             groq_transcription_model=os.getenv(
                 "GROQ_TRANSCRIPTION_MODEL", "whisper-large-v3-turbo"
             ).strip(),

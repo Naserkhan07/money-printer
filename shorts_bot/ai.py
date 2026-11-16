@@ -405,6 +405,9 @@ Hashtags and source credit are added by the application.
         models = [self.model]
         if self.fallback_model and self.fallback_model not in models:
             models.append(self.fallback_model)
+        for backup_model in ("openai/gpt-oss-120b", "openai/gpt-oss-20b"):
+            if backup_model not in models:
+                models.append(backup_model)
 
         last_rate_limit: RateLimitError | None = None
         token_budgets = [max_tokens]
