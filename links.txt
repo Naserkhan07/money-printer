@@ -2,15 +2,6 @@
 # A URL is removed atomically as soon as that video has downloaded successfully.
 # Downloaded URLs are recorded in work/downloaded-links.log.
 # [Autopilot: IShowSpeed] CLICK THIS STREAM IF YOU WANT GTA 6!
-https://www.youtube.com/watch?v=o0UeucVxYCA
-# [Autopilot: BeastBoyShub] the final boss move set will make you cry
-https://www.youtube.com/watch?v=opHsKwWq7OU
-# [Autopilot: GothamChess] INSANE WORLD 1 RANKING DRAMA
-https://www.youtube.com/watch?v=Nql_x5vYaP4
-# [Autopilot: Dream] Stripped Logs
-https://www.youtube.com/watch?v=iSwIiTNVvWo
-# [Autopilot: Not Your Type] Every Indian Street Food Ever !
-https://www.youtube.com/watch?v=7Wi38uVsW98
 # [Autopilot: HardToonz] School Annual Function| Scary Indian High School | EP 06 | HardToonz
 https://www.youtube.com/watch?v=eHQWaFDZvn4
 # [Autopilot: Samay Raina] INDIA’S GOT LATENT S2 EP9 ft. Raftaar, Balraj Ghai, Sahil Kale
@@ -31,3 +22,6 @@ https://www.youtube.com/watch?v=5hG_nAYEC2g
 https://www.youtube.com/watch?v=ZT-k42SC7L0
 # [Autopilot: Donut] Junkyard Beetle vs Offroad Whoops
 https://www.youtube.com/watch?v=tgxcWi4JOfM
+https://www.youtube.com/watch?v=o0UeucVxYCA
+# [Autopilot: GothamChess] Chess Slowrun Is Finished?
+https://www.youtube.com/watch?v=i6DakAMhHPA
