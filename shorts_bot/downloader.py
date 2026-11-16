@@ -126,9 +126,29 @@ class VideoDownloader:
             js_runtimes["node"] = {"path": node_bin}
         js_runtimes["deno"] = {}
 
-        yt_args: dict[str, object] = {
-            "player_client": ["android", "ios", "mweb", "web"],
-        }
+        cookies = os.getenv("YTDLP_COOKIES") or os.getenv("YOUTUBE_COOKIES")
+        cookie_file: str | None = None
+        if cookies:
+            cookie_path = Path("work") / "youtube_cookies.txt"
+            cookie_path.parent.mkdir(parents=True, exist_ok=True)
+            cookie_path.write_text(cookies, encoding="utf-8")
+            cookie_file = str(cookie_path)
+            logger.info("[downloader] Using YouTube cookies from YTDLP_COOKIES env: %s", cookie_path)
+        else:
+            repo_cookies = Path("youtube_cookies.txt")
+            if repo_cookies.exists():
+                cookie_file = str(repo_cookies)
+                logger.info("[downloader] Using YouTube cookies file: %s", repo_cookies)
+
+        yt_args: dict[str, object] = {}
+        # Client selection rule:
+        # If desktop browser cookies are provided, MUST use web/mweb clients.
+        # Sending desktop cookies with android/ios client signatures triggers HTTP 403 Forbidden on YouTube CDN.
+        if cookie_file:
+            yt_args["player_client"] = ["web", "mweb"]
+        else:
+            yt_args["player_client"] = ["mweb", "web", "ios"]
+
         po_token = cls._resolve_po_token()
         env_source = "env" if (os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")) else "provider"
         visitor_data = os.getenv("YOUTUBE_VISITOR_DATA") or os.getenv("VISITOR_DATA")
@@ -139,8 +159,17 @@ class VideoDownloader:
             logger.info("[downloader] Using configured Visitor Data from environment")
             yt_args["visitor_data"] = [visitor_data]
 
+        extractor_args: dict[str, dict[str, object]] = {
+            "youtube": yt_args,
+        }
+        pot_provider_url = os.getenv("PO_TOKEN_PROVIDER_URL", "http://127.0.0.1:4416").rstrip("/")
+        if pot_provider_url:
+            extractor_args["youtubepot-bgutilhttp"] = {
+                "base_url": [pot_provider_url],
+            }
+
         options: dict[str, object] = {
-            # Prefer 1080p max, fall back to progressive stream (e.g. 18) when adaptive streams are restricted
+            # Prefer 1080p max, fall back to progressive stream (e.g. 18/22) when adaptive streams are restricted
             "format": "bestvideo*[height<=1080]+bestaudio/best[height<=1080]/best/18/best",
             "outtmpl": output_template,
             "merge_output_format": "mkv",
@@ -150,17 +179,13 @@ class VideoDownloader:
             "restrictfilenames": True,
             "overwrites": True,
             "writeinfojson": True,
-            # Windows networks and some ISPs intermittently reset YouTube CDN streams.
-            # Resume partial files, force IPv4, use small HTTP chunks, and back off.
             "continuedl": True,
             "source_address": "0.0.0.0",
             "socket_timeout": 30,
-            "http_chunk_size": 10 * 1024 * 1024,
-            "concurrent_fragment_downloads": 8,
-            # Mobile app client spoofing + PO Token plugin support (100% cookie-free)
-            "extractor_args": {
-                "youtube": yt_args,
-            },
+            # Single fragment download and max 25MB/s rate to avoid triggering YouTube CDN's 403 Forbidden anti-flood block
+            "concurrent_fragment_downloads": 1,
+            "ratelimit": 25 * 1024 * 1024,
+            "extractor_args": extractor_args,
             # Current YouTube extraction requires a JS runtime for player challenges.
             "js_runtimes": js_runtimes,
             "retries": 10,
@@ -174,18 +199,8 @@ class VideoDownloader:
             },
         }
 
-        cookies = os.getenv("YTDLP_COOKIES") or os.getenv("YOUTUBE_COOKIES")
-        if cookies:
-            cookie_path = Path("work") / "youtube_cookies.txt"
-            cookie_path.parent.mkdir(parents=True, exist_ok=True)
-            cookie_path.write_text(cookies, encoding="utf-8")
-            options["cookiefile"] = str(cookie_path)
-            logger.info("[downloader] Using YouTube cookies from YTDLP_COOKIES env: %s", cookie_path)
-        else:
-            repo_cookies = Path("youtube_cookies.txt")
-            if repo_cookies.exists():
-                options["cookiefile"] = str(repo_cookies)
-                logger.info("[downloader] Using YouTube cookies file: %s", repo_cookies)
+        if cookie_file:
+            options["cookiefile"] = cookie_file
 
         proxy = (
             os.getenv("YOUTUBE_PROXY")
@@ -386,7 +401,7 @@ class VideoDownloader:
         destination.mkdir(parents=True, exist_ok=True)
         output_template = str(destination / "source.%(ext)s")
 
-        # 1. Primary attempt: pure mobile client (100% cookie-free)
+        # 1. Primary attempt: yt-dlp adaptive stream (1080p)
         options = self._download_options(output_template)
         info: dict[str, object] | None = None
         try:
@@ -398,21 +413,38 @@ class VideoDownloader:
             elif "video is unavailable" in detail.casefold() or "this video is unavailable" in detail.casefold() or "private video" in detail.casefold():
                 raise DownloadError(f"Video is unavailable or private on YouTube: {detail}")
 
-            logger.warning("[downloader] yt-dlp failed (%s); trying pytubefix fallback...", detail[:120])
-            # 2. Fallback: pytubefix Android/VisionOS progressive stream
+            # 2. Progressive single-stream fallback (e.g. 720p/360p pre-merged MP4)
+            # Progressive streams avoid DASH fragmentation and SABR chunking that trigger CDN 403 Forbidden.
+            logger.warning("[downloader] Adaptive yt-dlp failed (%s); trying progressive stream fallback...", detail[:120])
             try:
-                return self._download_pytubefix(url, destination)
-            except Exception as pyfix_exc:
-                logger.warning("[downloader] pytubefix failed (%s); trying Cobalt API fallback...", pyfix_exc)
-
-            # 3. Fallback: Cobalt API stream
-            try:
-                return self._download_cobalt(url, destination)
-            except Exception as cobalt_exc:
-                logger.warning("[downloader] Cobalt API fallback failed: %s", cobalt_exc)
-                raise DownloadError(
-                    f"YouTube download failed: {self._download_error_detail(detail)}"
-                ) from exc
+                prog_options = dict(options)
+                prog_options["format"] = "22/18/best[height<=720][ext=mp4]/best[ext=mp4]/best"
+                info = self._extract_info(url, prog_options)
+            except Exception as prog_exc:
+                logger.warning("[downloader] Progressive yt-dlp failed (%s); trying iOS/mweb client fallback...", prog_exc)
+                # 3. Alternative client fallback: iOS / mweb
+                try:
+                    ios_options = dict(options)
+                    ios_options["format"] = "22/18/best[height<=720]/best"
+                    ext_args = dict(ios_options.get("extractor_args", {}))
+                    ext_args["youtube"] = {"player_client": ["ios", "mweb"]}
+                    ios_options["extractor_args"] = ext_args
+                    info = self._extract_info(url, ios_options)
+                except Exception as ios_exc:
+                    logger.warning("[downloader] Alternative client yt-dlp failed (%s); trying pytubefix fallback...", ios_exc)
+                    # 4. Fallback: pytubefix Android/VisionOS progressive stream
+                    try:
+                        return self._download_pytubefix(url, destination)
+                    except Exception as pyfix_exc:
+                        logger.warning("[downloader] pytubefix failed (%s); trying Cobalt API fallback...", pyfix_exc)
+                        # 5. Fallback: Cobalt API stream
+                        try:
+                            return self._download_cobalt(url, destination)
+                        except Exception as cobalt_exc:
+                            logger.warning("[downloader] Cobalt API fallback failed: %s", cobalt_exc)
+                            raise DownloadError(
+                                f"YouTube download failed: {self._download_error_detail(detail)}"
+                            ) from exc
         except Exception as exc:
             try:
                 return self._download_cobalt(url, destination)

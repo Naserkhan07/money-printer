@@ -298,9 +298,21 @@ class GameplayManager:
         term = search_terms.get(category, f"{category} gameplay no copyright 1080p 60fps")
         query = f"ytsearch25:{term}"
 
+        cookies = os.getenv("YTDLP_COOKIES") or os.getenv("YOUTUBE_COOKIES")
+        cookie_file: str | None = None
+        if cookies:
+            cookie_path = Path("work") / "youtube_cookies.txt"
+            if not cookie_path.exists():
+                cookie_path.parent.mkdir(parents=True, exist_ok=True)
+                cookie_path.write_text(cookies, encoding="utf-8")
+            cookie_file = str(cookie_path)
+        elif Path("youtube_cookies.txt").exists():
+            cookie_file = "youtube_cookies.txt"
+
         po_token = _resolve_po_token()
         visitor_data = os.getenv("YOUTUBE_VISITOR_DATA") or os.getenv("VISITOR_DATA")
-        extractor_arg = "youtube:player_client=android,ios,mweb,web"
+        client_spec = "web,mweb" if cookie_file else "mweb,web,ios"
+        extractor_arg = f"youtube:player_client={client_spec}"
         if po_token:
             extractor_arg += f";po_token={po_token}"
             logger.info("[Gameplay] Using PO Token for YouTube search extraction")
@@ -314,16 +326,9 @@ class GameplayManager:
             "--extractor-args",
             extractor_arg,
         ]
-        cookies = os.getenv("YTDLP_COOKIES") or os.getenv("YOUTUBE_COOKIES")
-        cookie_file: str | None = None
-        if cookies:
-            cookie_path = Path("work") / "youtube_cookies.txt"
-            if not cookie_path.exists():
-                cookie_path.parent.mkdir(parents=True, exist_ok=True)
-                cookie_path.write_text(cookies, encoding="utf-8")
-            cookie_file = str(cookie_path)
-        elif Path("youtube_cookies.txt").exists():
-            cookie_file = "youtube_cookies.txt"
+        pot_provider_url = os.getenv("PO_TOKEN_PROVIDER_URL", "http://127.0.0.1:4416").rstrip("/")
+        if pot_provider_url:
+            cmd_base.extend(["--extractor-args", f"youtubepot-bgutilhttp:base_url={pot_provider_url}"])
         if cookie_file:
             cmd_base.extend(["--cookies", cookie_file])
 
