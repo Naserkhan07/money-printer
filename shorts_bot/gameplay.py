@@ -15,6 +15,37 @@ logger = logging.getLogger(__name__)
 SUPPORTED_CATEGORIES = ("gta5", "minecraft", "subway_surfers")
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm"}
 
+
+def _resolve_po_token() -> str | None:
+    import json
+    import os
+    import urllib.request
+
+    token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
+    if token:
+        return token
+    provider_url = os.getenv("PO_TOKEN_PROVIDER_URL", "http://127.0.0.1:4416").rstrip("/")
+    for path in ("/api/po_token", "/po_token", "/api/v1/po_token"):
+        try:
+            req = urllib.request.Request(f"{provider_url}{path}", method="GET")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                body = resp.read()
+            try:
+                data = json.loads(body)
+                if isinstance(data, dict):
+                    for key in ("po_token", "token", "access_token"):
+                        val = data.get(key)
+                        if isinstance(val, str) and val:
+                            return val
+            except Exception:
+                pass
+            text = body.decode("utf-8", "ignore").strip()
+            if text and len(text) > 20 and " " not in text:
+                return text
+        except Exception:
+            continue
+    return None
+
 VERIFIED_GAMEPLAY_SOURCES: dict[str, list[dict[str, str]]] = {
     "gta5": [
         {"id": "74voi0vlxHE", "url": "https://www.youtube.com/watch?v=74voi0vlxHE", "title": "GTA 5 Stunt Race"},
@@ -246,11 +277,12 @@ class GameplayManager:
         term = search_terms.get(category, f"{category} gameplay no copyright 1080p 60fps")
         query = f"ytsearch25:{term}"
 
-        po_token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
+        po_token = _resolve_po_token()
         visitor_data = os.getenv("YOUTUBE_VISITOR_DATA") or os.getenv("VISITOR_DATA")
         extractor_arg = "youtube:player_client=android,ios,mweb,web"
         if po_token:
             extractor_arg += f";po_token={po_token}"
+            logger.info("[Gameplay] Using PO Token for YouTube search extraction")
         if visitor_data:
             extractor_arg += f";visitor_data={visitor_data}"
 

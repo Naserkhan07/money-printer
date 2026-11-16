@@ -64,6 +64,38 @@ class VideoDownloader:
         return min(2 ** max(0, retry_number - 1), 20)
 
     @classmethod
+    def _resolve_po_token(cls) -> str | None:
+        import os
+
+        import httpx
+
+        token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
+        if token:
+            return token
+        provider_url = os.getenv("PO_TOKEN_PROVIDER_URL", "http://127.0.0.1:4416").rstrip("/")
+        for path in ("/api/po_token", "/po_token", "/api/v1/po_token"):
+            try:
+                with httpx.Client(timeout=5.0) as client:
+                    resp = client.get(f"{provider_url}{path}")
+                if resp.status_code != 200:
+                    continue
+                try:
+                    data = resp.json()
+                except Exception:
+                    data = None
+                if isinstance(data, dict):
+                    for key in ("po_token", "token", "access_token"):
+                        val = data.get(key)
+                        if isinstance(val, str) and val:
+                            return val
+                text = resp.text.strip()
+                if text and len(text) > 20 and " " not in text:
+                    return text
+            except Exception:
+                continue
+        return None
+
+    @classmethod
     def _download_options(
         cls,
         output_template: str,
@@ -79,14 +111,28 @@ class VideoDownloader:
         yt_args: dict[str, object] = {
             "player_client": ["android", "ios", "mweb", "web"],
         }
-        po_token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
+        po_token = cls._resolve_po_token()
+        env_source = "env" if (os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")) else "provider"
         visitor_data = os.getenv("YOUTUBE_VISITOR_DATA") or os.getenv("VISITOR_DATA")
         if po_token:
-            logger.info("[downloader] Using configured PO Token from environment")
+            logger.info("[downloader] Using PO Token from %s (cookie-free extraction)", env_source)
             yt_args["po_token"] = [po_token]
         if visitor_data:
             logger.info("[downloader] Using configured Visitor Data from environment")
             yt_args["visitor_data"] = [visitor_data]
+
+        cookies = os.getenv("YTDLP_COOKIES") or os.getenv("YOUTUBE_COOKIES")
+        if cookies:
+            cookie_path = Path("work") / "youtube_cookies.txt"
+            cookie_path.parent.mkdir(parents=True, exist_ok=True)
+            cookie_path.write_text(cookies, encoding="utf-8")
+            options["cookiefile"] = str(cookie_path)
+            logger.info("[downloader] Using YouTube cookies from YTDLP_COOKIES env: %s", cookie_path)
+        else:
+            repo_cookies = Path("youtube_cookies.txt")
+            if repo_cookies.exists():
+                options["cookiefile"] = str(repo_cookies)
+                logger.info("[downloader] Using YouTube cookies file: %s", repo_cookies)
 
         options: dict[str, object] = {
             # Prefer 1080p max, fall back to progressive stream (e.g. 18) when adaptive streams are restricted
@@ -173,7 +219,7 @@ class VideoDownloader:
         from pytubefix import YouTube
 
         destination.mkdir(parents=True, exist_ok=True)
-        po_token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
+        po_token = self._resolve_po_token()
         visitor_data = os.getenv("YOUTUBE_VISITOR_DATA") or os.getenv("VISITOR_DATA")
         proxy = (
             os.getenv("YOUTUBE_PROXY")
@@ -183,9 +229,10 @@ class VideoDownloader:
         )
 
         kwargs: dict[str, object] = {}
-        if po_token and visitor_data:
+        if po_token:
             kwargs["use_po_token"] = True
-            kwargs["po_token_verifier"] = lambda: (visitor_data, po_token)
+            kwargs["po_token_verifier"] = lambda: (visitor_data or "", po_token)
+            logger.info("[pytubefix] Using PO Token for botguard bypass")
         if proxy:
             kwargs["proxies"] = {"http": proxy, "https": proxy}
 
