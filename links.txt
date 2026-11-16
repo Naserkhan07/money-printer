@@ -1,11 +1,3 @@
 # Add one authorized YouTube video URL per line below.
 # A URL is removed atomically as soon as that video has downloaded successfully.
 # Downloaded URLs are recorded in work/downloaded-links.log.
-# [Autopilot: IShowSpeed] CLICK THIS STREAM IF YOU WANT GTA 6!
-# [Autopilot: Warangal Diaries] GHAR DAMAD Ki Kahani (Part-2) | Warangal Diaries Comedy
-https://www.youtube.com/watch?v=WA6HGLDKM5s
-# [Autopilot: DiscoveryChannelInd] Final Evidence & Case Breakthroughs | Expedition X S1, S2, S3 & S4 | Discovery Channel India
-https://www.youtube.com/watch?v=nJbu8UjG1DQ
-https://www.youtube.com/watch?v=o0UeucVxYCA
-# [Autopilot: GothamChess] Chess Slowrun Is Finished?
-https://www.youtube.com/watch?v=i6DakAMhHPA
