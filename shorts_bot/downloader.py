@@ -24,6 +24,7 @@ _ALLOWED_HOSTS = {
     "youtube-nocookie.com",
     "www.youtube-nocookie.com",
 }
+_cached_downloader_po: tuple[float, str | None] = (0.0, None)
 
 
 def is_youtube_url(value: str) -> bool:
@@ -65,17 +66,26 @@ class VideoDownloader:
 
     @classmethod
     def _resolve_po_token(cls) -> str | None:
+        global _cached_downloader_po
         import os
+        import time
 
         import httpx
 
         token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
         if token:
             return token
+
+        now = time.time()
+        last_check, cached_val = _cached_downloader_po
+        if now - last_check < 300:
+            return cached_val
+
         provider_url = os.getenv("PO_TOKEN_PROVIDER_URL", "http://127.0.0.1:4416").rstrip("/")
+        resolved: str | None = None
         for path in ("/api/po_token", "/po_token", "/api/v1/po_token"):
             try:
-                with httpx.Client(timeout=5.0) as client:
+                with httpx.Client(timeout=1.5) as client:
                     resp = client.get(f"{provider_url}{path}")
                 if resp.status_code != 200:
                     continue
@@ -87,13 +97,21 @@ class VideoDownloader:
                     for key in ("po_token", "token", "access_token"):
                         val = data.get(key)
                         if isinstance(val, str) and val:
-                            return val
-                text = resp.text.strip()
-                if text and len(text) > 20 and " " not in text:
-                    return text
+                            resolved = val
+                            break
+                if not resolved:
+                    text = resp.text.strip()
+                    if text and len(text) > 20 and " " not in text:
+                        resolved = text
+                if resolved:
+                    break
+            except (httpx.ConnectError, httpx.ConnectTimeout):
+                break
             except Exception:
                 continue
-        return None
+
+        _cached_downloader_po = (now, resolved)
+        return resolved
 
     @classmethod
     def _download_options(
@@ -120,19 +138,6 @@ class VideoDownloader:
         if visitor_data:
             logger.info("[downloader] Using configured Visitor Data from environment")
             yt_args["visitor_data"] = [visitor_data]
-
-        cookies = os.getenv("YTDLP_COOKIES") or os.getenv("YOUTUBE_COOKIES")
-        if cookies:
-            cookie_path = Path("work") / "youtube_cookies.txt"
-            cookie_path.parent.mkdir(parents=True, exist_ok=True)
-            cookie_path.write_text(cookies, encoding="utf-8")
-            options["cookiefile"] = str(cookie_path)
-            logger.info("[downloader] Using YouTube cookies from YTDLP_COOKIES env: %s", cookie_path)
-        else:
-            repo_cookies = Path("youtube_cookies.txt")
-            if repo_cookies.exists():
-                options["cookiefile"] = str(repo_cookies)
-                logger.info("[downloader] Using YouTube cookies file: %s", repo_cookies)
 
         options: dict[str, object] = {
             # Prefer 1080p max, fall back to progressive stream (e.g. 18) when adaptive streams are restricted
@@ -168,6 +173,20 @@ class VideoDownloader:
                 "extractor": cls._retry_delay,
             },
         }
+
+        cookies = os.getenv("YTDLP_COOKIES") or os.getenv("YOUTUBE_COOKIES")
+        if cookies:
+            cookie_path = Path("work") / "youtube_cookies.txt"
+            cookie_path.parent.mkdir(parents=True, exist_ok=True)
+            cookie_path.write_text(cookies, encoding="utf-8")
+            options["cookiefile"] = str(cookie_path)
+            logger.info("[downloader] Using YouTube cookies from YTDLP_COOKIES env: %s", cookie_path)
+        else:
+            repo_cookies = Path("youtube_cookies.txt")
+            if repo_cookies.exists():
+                options["cookiefile"] = str(repo_cookies)
+                logger.info("[downloader] Using YouTube cookies file: %s", repo_cookies)
+
         proxy = (
             os.getenv("YOUTUBE_PROXY")
             or os.getenv("PROXY")

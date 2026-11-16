@@ -16,19 +16,32 @@ SUPPORTED_CATEGORIES = ("gta5", "minecraft", "subway_surfers")
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm"}
 
 
+_cached_gameplay_po: tuple[float, str | None] = (0.0, None)
+
+
 def _resolve_po_token() -> str | None:
+    global _cached_gameplay_po
     import json
     import os
+    import time
+    import urllib.error
     import urllib.request
 
     token = os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")
     if token:
         return token
+
+    now = time.time()
+    last_check, cached_val = _cached_gameplay_po
+    if now - last_check < 300:
+        return cached_val
+
     provider_url = os.getenv("PO_TOKEN_PROVIDER_URL", "http://127.0.0.1:4416").rstrip("/")
+    resolved: str | None = None
     for path in ("/api/po_token", "/po_token", "/api/v1/po_token"):
         try:
             req = urllib.request.Request(f"{provider_url}{path}", method="GET")
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
                 body = resp.read()
             try:
                 data = json.loads(body)
@@ -36,15 +49,23 @@ def _resolve_po_token() -> str | None:
                     for key in ("po_token", "token", "access_token"):
                         val = data.get(key)
                         if isinstance(val, str) and val:
-                            return val
+                            resolved = val
+                            break
             except Exception:
                 pass
-            text = body.decode("utf-8", "ignore").strip()
-            if text and len(text) > 20 and " " not in text:
-                return text
+            if not resolved:
+                text = body.decode("utf-8", "ignore").strip()
+                if text and len(text) > 20 and " " not in text:
+                    resolved = text
+            if resolved:
+                break
+        except (urllib.error.URLError, TimeoutError, OSError):
+            break
         except Exception:
             continue
-    return None
+
+    _cached_gameplay_po = (now, resolved)
+    return resolved
 
 VERIFIED_GAMEPLAY_SOURCES: dict[str, list[dict[str, str]]] = {
     "gta5": [
@@ -293,6 +314,19 @@ class GameplayManager:
             "--extractor-args",
             extractor_arg,
         ]
+        cookies = os.getenv("YTDLP_COOKIES") or os.getenv("YOUTUBE_COOKIES")
+        cookie_file: str | None = None
+        if cookies:
+            cookie_path = Path("work") / "youtube_cookies.txt"
+            if not cookie_path.exists():
+                cookie_path.parent.mkdir(parents=True, exist_ok=True)
+                cookie_path.write_text(cookies, encoding="utf-8")
+            cookie_file = str(cookie_path)
+        elif Path("youtube_cookies.txt").exists():
+            cookie_file = "youtube_cookies.txt"
+        if cookie_file:
+            cmd_base.extend(["--cookies", cookie_file])
+
         proxy = (
             os.getenv("YOUTUBE_PROXY")
             or os.getenv("PROXY")
