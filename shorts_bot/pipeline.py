@@ -224,11 +224,23 @@ class WorkflowPipeline:
         job_id: str,
         reuse_downloaded: bool = False,
         expand_existing: bool = False,
+        max_uploads_this_run: int | None = None,
+        uploaded_platforms_tracker: dict[str, int] | None = None,
     ) -> Job:
         job = self.repository.get(job_id)
         if not job:
             raise KeyError(f"Unknown job {job_id}")
         job_dir = self.settings.work_dir / "jobs" / job.id
+        effective_max_uploads = (
+            max_uploads_this_run
+            if max_uploads_this_run is not None
+            else self.settings.max_uploads_per_cycle
+        )
+        uploaded_platforms_this_run = (
+            uploaded_platforms_tracker
+            if uploaded_platforms_tracker is not None
+            else {}
+        )
 
         try:
             existing_clips = self.repository.list_clips(job.id)
@@ -310,7 +322,6 @@ class WorkflowPipeline:
             }
             total_clips = len(clips)
             metadata_requests = 0
-            uploaded_platforms_this_run: dict[str, int] = {}
             for clip in clips:
                 try:
                     if not clip.metadata_ready:
@@ -349,6 +360,7 @@ class WorkflowPipeline:
                         blocked_platforms,
                         full_transcript=full_transcript,
                         uploaded_platforms_this_run=uploaded_platforms_this_run,
+                        max_uploads_this_run=effective_max_uploads,
                     )
                 except Exception as exc:
                     self.repository.update_clip(
@@ -560,6 +572,7 @@ class WorkflowPipeline:
         blocked_platforms: dict[str, str],
         full_transcript: str | None = None,
         uploaded_platforms_this_run: dict[str, int] | None = None,
+        max_uploads_this_run: int = 1,
     ) -> JobClip:
         if self._clip_published_everywhere(clip):
             # Every enabled platform already has this clip; never re-render or re-upload it.
@@ -570,6 +583,19 @@ class WorkflowPipeline:
             if clip.output_path
             else (job_dir / f"short-{clip.clip_index:03d}.mp4")
         )
+        if not output_path.exists():
+            archive_candidates = list(
+                self.settings.work_dir.glob(
+                    f"pending_uploads/{job.id}-pending-*/videos/*{clip.clip_index:03d}*.mp4"
+                )
+            )
+            if archive_candidates and archive_candidates[0].exists():
+                output_path = archive_candidates[0]
+                clip = self.repository.update_clip(
+                    job.id,
+                    clip.clip_index,
+                    output_path=str(output_path),
+                )
         if output_path.exists():
             try:
                 existing_duration = await asyncio.to_thread(
@@ -709,6 +735,19 @@ class WorkflowPipeline:
             else (job_dir / f"thumbnail-{clip.clip_index:03d}.jpg")
         )
         if not thumbnail_path.exists():
+            archive_thumb_candidates = list(
+                self.settings.work_dir.glob(
+                    f"pending_uploads/{job.id}-pending-*/thumbnails/*{clip.clip_index:03d}*.jpg"
+                )
+            )
+            if archive_thumb_candidates and archive_thumb_candidates[0].exists():
+                thumbnail_path = archive_thumb_candidates[0]
+                clip = self.repository.update_clip(
+                    job.id,
+                    clip.clip_index,
+                    thumbnail_path=str(thumbnail_path),
+                )
+        if not thumbnail_path.exists():
             await asyncio.to_thread(
                 self.services.media.generate_thumbnail,
                 output_path,
@@ -722,20 +761,22 @@ class WorkflowPipeline:
             )
 
         # YouTube Upload gating
-        target_per_slot = getattr(self.services.scheduler, "min_uploads_per_slot", 3) if self.services.scheduler else 3
         can_upload_youtube = bool(
             self.services.youtube_uploader
             and not clip.youtube_video_id
             and "YouTube" not in blocked_platforms
         )
-        if can_upload_youtube and self.services.scheduler:
-            if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("YouTube", 0) >= target_per_slot:
+        if can_upload_youtube:
+            if (
+                uploaded_platforms_this_run is not None
+                and uploaded_platforms_this_run.get("YouTube", 0) >= max_uploads_this_run
+            ):
                 can_upload_youtube = False
-            else:
-                should_up, reason = self.services.scheduler.should_upload_now(self.repository, "YouTube")
-                if not should_up:
-                    can_upload_youtube = False
-                    logger.info("YouTube upload deferred: %s", reason)
+                logger.info(
+                    "YouTube upload deferred: cycle upload limit reached (%d/%d).",
+                    uploaded_platforms_this_run.get("YouTube", 0),
+                    max_uploads_this_run,
+                )
 
         if can_upload_youtube:
             if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("YouTube", 0) > 0:
@@ -794,14 +835,17 @@ class WorkflowPipeline:
             and not clip.instagram_media_id
             and "Instagram" not in blocked_platforms
         )
-        if can_upload_instagram and self.services.scheduler:
-            if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("Instagram", 0) >= target_per_slot:
+        if can_upload_instagram:
+            if (
+                uploaded_platforms_this_run is not None
+                and uploaded_platforms_this_run.get("Instagram", 0) >= max_uploads_this_run
+            ):
                 can_upload_instagram = False
-            else:
-                should_up, reason = self.services.scheduler.should_upload_now(self.repository, "Instagram")
-                if not should_up:
-                    can_upload_instagram = False
-                    logger.info("Instagram upload deferred: %s", reason)
+                logger.info(
+                    "Instagram upload deferred: cycle upload limit reached (%d/%d).",
+                    uploaded_platforms_this_run.get("Instagram", 0),
+                    max_uploads_this_run,
+                )
 
         if can_upload_instagram:
             if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("Instagram", 0) > 0:
@@ -875,14 +919,17 @@ class WorkflowPipeline:
             and not clip.facebook_video_id
             and "Facebook" not in blocked_platforms
         )
-        if can_upload_facebook and self.services.scheduler:
-            if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("Facebook", 0) >= target_per_slot:
+        if can_upload_facebook:
+            if (
+                uploaded_platforms_this_run is not None
+                and uploaded_platforms_this_run.get("Facebook", 0) >= max_uploads_this_run
+            ):
                 can_upload_facebook = False
-            else:
-                should_up, reason = self.services.scheduler.should_upload_now(self.repository, "Facebook")
-                if not should_up:
-                    can_upload_facebook = False
-                    logger.info("Facebook upload deferred: %s", reason)
+                logger.info(
+                    "Facebook upload deferred: cycle upload limit reached (%d/%d).",
+                    uploaded_platforms_this_run.get("Facebook", 0),
+                    max_uploads_this_run,
+                )
 
         if can_upload_facebook:
             if uploaded_platforms_this_run is not None and uploaded_platforms_this_run.get("Facebook", 0) > 0:
@@ -1017,6 +1064,20 @@ class WorkflowPipeline:
             if path.is_file() and path.suffix not in {".json", ".part", ".ytdl"}
         ]
         if not candidates:
+            clips = self.repository.list_clips(job.id)
+            if clips and all(
+                (c.output_path and Path(c.output_path).exists())
+                or bool(list(self.settings.work_dir.glob(f"pending_uploads/{job.id}-pending-*/videos/*{c.clip_index:03d}*.mp4")))
+                for c in clips
+            ):
+                return SourceVideo(
+                    path=job_dir / "resumed.mp4",
+                    source_url=job.source_url,
+                    video_id="resumed",
+                    title=job.source_title or "Resumed video",
+                    uploader="Resumed creator",
+                    duration_seconds=sum(c.duration_seconds for c in clips),
+                )
             raise WorkflowError(
                 f"Job {job.id} has no completed source download to resume. Add its URL "
                 "back to links.txt instead."

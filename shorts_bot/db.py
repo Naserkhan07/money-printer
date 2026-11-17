@@ -444,11 +444,25 @@ class JobRepository:
             for row in rows:
                 p = row["clip_path"]
                 if not p or not Path(p).exists():
-                    connection.execute(
-                        "UPDATE job_clips SET output_path = NULL, thumbnail_path = NULL WHERE job_id = ? AND clip_index = ?",
-                        (row["clip_job_id"], row["clip_idx"]),
+                    # Check pending_uploads archive folder for restored clips
+                    base_work = Path(p).parent.parent.parent if p else Path("work")
+                    archive_candidates = list(
+                        base_work.glob(
+                            f"pending_uploads/{row['clip_job_id']}-pending-*/videos/*{row['clip_idx']:03d}*.mp4"
+                        )
                     )
-                    continue
+                    if archive_candidates and archive_candidates[0].exists():
+                        p = str(archive_candidates[0])
+                        connection.execute(
+                            "UPDATE job_clips SET output_path = ? WHERE job_id = ? AND clip_index = ?",
+                            (p, row["clip_job_id"], row["clip_idx"]),
+                        )
+                    else:
+                        connection.execute(
+                            "UPDATE job_clips SET output_path = NULL, thumbnail_path = NULL WHERE job_id = ? AND clip_index = ?",
+                            (row["clip_job_id"], row["clip_idx"]),
+                        )
+                        continue
                 job = self._from_row(row)
                 if job.id not in seen_ids:
                     seen_ids.add(job.id)

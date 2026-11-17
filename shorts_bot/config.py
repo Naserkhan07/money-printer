@@ -145,7 +145,9 @@ class Settings:
     caption_font: str
     caption_font_size: int
     caption_highlight_colors: tuple[str, ...]
-    scheduler_enabled: bool = True
+    cycle_interval_minutes: int = 50
+    max_uploads_per_cycle: int = 1
+    scheduler_enabled: bool = False
     scheduler_advance_prep_minutes: int = 60
     scheduler_max_daily_youtube: int = 50
     scheduler_max_daily_instagram: int = 50
@@ -411,9 +413,15 @@ class Settings:
             freellmapi_url=resolved_freellm_url,
             freellmapi_api_key=resolved_freellm_key,
             freellmapi_model=resolved_freellm_model,
+            cycle_interval_minutes=_int_env("CYCLE_INTERVAL_MINUTES", 50),
+            max_uploads_per_cycle=_int_env("MAX_UPLOADS_PER_CYCLE", 1),
         )
         settings.validate_common()
         return settings
+
+    @property
+    def cycle_interval_seconds(self) -> int:
+        return max(60, self.cycle_interval_minutes * 60)
 
     def validate_common(self) -> None:
         if not 1_000 <= self.groq_max_transcript_chars <= 60_000:

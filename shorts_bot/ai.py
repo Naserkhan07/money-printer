@@ -620,7 +620,7 @@ def _completion_request(
         )
         request.update(
             {
-                "temperature": 0.7,
+                "temperature": 0.2,
                 "top_p": 0.8,
                 "reasoning_effort": "none",
                 "reasoning_format": "hidden",

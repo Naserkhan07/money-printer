@@ -181,13 +181,19 @@ async def run_file_queue(
             flush=True,
         )
 
-    async def retry_pending_jobs() -> None:
+    async def retry_pending_jobs(
+        uploaded_this_cycle: dict[str, int],
+        max_uploads: int = 1,
+    ) -> bool:
         counts = repository.pending_upload_counts()
         print(
             "Pending upload report: "
             + " | ".join(f"{platform}: {count}" for platform, count in counts.items()),
             flush=True,
         )
+        if max(uploaded_this_cycle.values(), default=0) >= max_uploads:
+            return False
+
         youtube_ready = bool(
             settings.upload_youtube and services.platform_unavailable("YouTube") is None
         )
@@ -201,14 +207,24 @@ async def run_file_queue(
             youtube=youtube_ready,
             instagram=instagram_ready,
             facebook=facebook_ready,
-            limit=settings.pending_retry_jobs_per_cycle,
+            limit=1,
         )
+        posted_any = False
         for pending_job in pending_jobs:
             print(
-                f"[{pending_job.id}] automatically retrying pending platform uploads",
+                f"[{pending_job.id}] Posting 1 video from pending uploads...",
                 flush=True,
             )
-            await pipeline.process(pending_job.id, reuse_downloaded=True)
+            await pipeline.process(
+                pending_job.id,
+                reuse_downloaded=True,
+                max_uploads_this_run=max_uploads,
+                uploaded_platforms_tracker=uploaded_this_cycle,
+            )
+            if max(uploaded_this_cycle.values(), default=0) >= max_uploads:
+                posted_any = True
+                break
+        return posted_any
 
     next_credential_check = time.monotonic() + settings.credential_check_minutes * 60
     next_pending_retry = time.monotonic()
@@ -291,10 +307,13 @@ async def run_file_queue(
                 await asyncio.sleep(min(settings.links_poll_seconds, 30))
                 continue
 
-            # Always check if any prepared/rendered clips are due for publication at the current scheduled slot
-            await retry_pending_jobs()
+            # Drip posting cycle: tracks uploads across platforms for this cycle
+            uploaded_this_cycle: dict[str, int] = {"YouTube": 0, "Instagram": 0, "Facebook": 0}
 
-            # Check local spool dropzone for dropped videos
+            # 1. Check pending uploads: post 1 pending video across YouTube, Instagram, Facebook
+            await retry_pending_jobs(uploaded_this_cycle, settings.max_uploads_per_cycle)
+
+            # 2. Check local spool dropzone for dropped videos
             spool_candidates = spool_watcher.scan_new_files()
             for sf in spool_candidates:
                 print(f"[Spooler] Found dropped video: {sf.name}. Ingesting and processing...", flush=True)
@@ -303,6 +322,10 @@ async def run_file_queue(
                 except Exception as exc:
                     print(f"[Spooler] Ingest failed for {sf.name}: {exc}", file=sys.stderr, flush=True)
 
+            # 3. Check for new video in links.txt / channels
+            # Prepare that whole video into all clips (e.g. 3 shorts).
+            # If we haven't posted yet this cycle, post 1 clip now!
+            # Put the rest of the clips in the pending upload folder.
             urls = link_queue.pending_urls()
             processed_new_url = False
             for url in urls:
@@ -310,7 +333,14 @@ async def run_file_queue(
                     continue
                 processed_new_url = True
                 job = repository.create(chat_id=0, user_id=0, source_url=url)
-                result = await pipeline.process(job.id)
+                remaining_uploads = max(
+                    0, settings.max_uploads_per_cycle - max(uploaded_this_cycle.values(), default=0)
+                )
+                result = await pipeline.process(
+                    job.id,
+                    max_uploads_this_run=remaining_uploads,
+                    uploaded_platforms_tracker=uploaded_this_cycle,
+                )
                 if result.error:
                     failed_urls_this_session.add(url)
                     if "live event will begin" in result.error.lower() or "premieres in" in result.error.lower() or "scheduled livestream" in result.error.lower() or "video is unavailable" in result.error.lower():
@@ -339,9 +369,17 @@ async def run_file_queue(
                             "It remains queued and will retry after the next credential cycle.",
                             flush=True,
                         )
-                elif not watch:
-                    # In --once mode, successfully processing 1 video creates enough clips for scheduled distribution.
+                else:
+                    # In both watch and --once modes, preparing 1 full source video per cycle provides enough content.
                     break
+
+            total_posted_this_cycle = max(uploaded_this_cycle.values(), default=0)
+            pending_status = repository.pending_upload_counts()
+            print(
+                f"\n[Cycle Status] Posted {total_posted_this_cycle} video(s) this cycle. "
+                f"Pending upload queue: " + " | ".join(f"{p}: {c}" for p, c in pending_status.items()),
+                flush=True,
+            )
 
             if not watch:
                 print(
@@ -354,7 +392,15 @@ async def run_file_queue(
                 )
                 success = any(j.status.value == "completed" for j in repository.list_recent(0, limit=5))
                 return 0 if (not any_failures or success) else 1
-            await asyncio.sleep(settings.links_poll_seconds)
+
+            # In continuous mode, sleep for the cycle interval (50 minutes)
+            sleep_duration = settings.cycle_interval_seconds
+            print(
+                f"[Cycle] Waiting {settings.cycle_interval_minutes} minutes until the next posting cycle... "
+                "(Press Ctrl+C to stop)",
+                flush=True,
+            )
+            await asyncio.sleep(sleep_duration)
     finally:
         if autopilot_task:
             autopilot_task.cancel()

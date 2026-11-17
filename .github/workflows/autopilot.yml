@@ -2,8 +2,8 @@ name: 🚀 Autopilot — Autonomous Video Engine
 
 on:
   schedule:
-    # Autonomous 24/7 run: Polls creator channels & publishes per scheduled slots every 30 minutes
-    - cron: '*/30 * * * *'
+    # Autonomous 24/7 drip cycle: runs every hour to post 1 video and maintain pending buffer
+    - cron: '0 * * * *'
   push:
     paths:
       - 'links.txt'
@@ -21,11 +21,6 @@ on:
         options:
           - once
           - continuous_50min
-      force_upload:
-        description: 'Ignore scheduler window and post immediately'
-        required: false
-        default: true
-        type: boolean
 
 concurrency:
   group: money-printer-pipeline
@@ -42,11 +37,11 @@ jobs:
 
     env:
       RIGHTS_ACKNOWLEDGED: 'true'
-      SCHEDULER_ENABLED: 'false'
       UPLOAD_YOUTUBE: 'true'
       UPLOAD_INSTAGRAM: 'true'
       UPLOAD_FACEBOOK: 'true'
-      MIN_UPLOADS_PER_SLOT: '3'
+      CYCLE_INTERVAL_MINUTES: '50'
+      MAX_UPLOADS_PER_CYCLE: '1'
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GROQ_MODEL: 'qwen/qwen3.8-27b'
@@ -162,15 +157,13 @@ jobs:
         run: |
           python -m shorts_bot.preflight
 
-      - name: ⚡ Execute Autonomous Pipeline
-        env:
-          SCHEDULER_ENABLED: ${{ inputs.force_upload == false && 'true' || 'false' }}
+      - name: ⚡ Execute Autonomous Drip Pipeline
         run: |
           if [ "${{ inputs.mode }}" = "continuous_50min" ]; then
-            echo "Running in continuous watching mode (up to 50 minutes)..."
-            timeout 3000s python main.py || true
+            echo "Running in continuous watching mode (50-minute drip cycles)..."
+            timeout 10000s python main.py || true
           else
-            echo "Running batch cycle (--once)..."
+            echo "Running single drip cycle (--once)..."
             python -m shorts_bot.file_queue --once
           fi
 
