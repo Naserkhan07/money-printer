@@ -1065,10 +1065,19 @@ class WorkflowPipeline:
         ]
         if not candidates:
             clips = self.repository.list_clips(job.id)
-            if clips and all(
+            pending_clips = [
+                c
+                for c in clips
+                if (not c.youtube_video_id and self.settings.upload_youtube)
+                or (not c.instagram_media_id and self.settings.upload_instagram)
+                or (not c.facebook_video_id and self.settings.upload_facebook)
+            ]
+            target_clips = pending_clips if pending_clips else clips
+            if target_clips and all(
                 (c.output_path and Path(c.output_path).exists())
                 or bool(list(self.settings.work_dir.glob(f"pending_uploads/{job.id}-pending-*/videos/*{c.clip_index:03d}*.mp4")))
-                for c in clips
+                or bool(list(Path("work/pending_uploads").glob(f"{job.id}-pending-*/videos/*{c.clip_index:03d}*.mp4")))
+                for c in target_clips
             ):
                 return SourceVideo(
                     path=job_dir / "resumed.mp4",

@@ -447,6 +447,10 @@ class JobRepository:
                     # Check pending_uploads archive folder for restored clips
                     base_work = Path(p).parent.parent.parent if p else Path("work")
                     archive_candidates = list(
+                        Path("work/pending_uploads").glob(
+                            f"{row['clip_job_id']}-pending-*/videos/*{row['clip_idx']:03d}*.mp4"
+                        )
+                    ) or list(
                         base_work.glob(
                             f"pending_uploads/{row['clip_job_id']}-pending-*/videos/*{row['clip_idx']:03d}*.mp4"
                         )

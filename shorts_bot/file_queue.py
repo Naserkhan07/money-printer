@@ -17,6 +17,7 @@ from .errors import ConfigurationError, WorkflowError
 from .models import Job, SourceVideo
 from .pipeline import WorkflowPipeline, WorkflowServices
 from .spool import SpoolWatcher
+from .sync_ledger import sync_and_commit
 
 
 class LinkFileQueue:
@@ -258,8 +259,15 @@ async def run_file_queue(
     if watch and autopilot and autopilot.enabled:
         autopilot_task = asyncio.create_task(autopilot_worker())
 
+    cycle_index = 0
     try:
         while True:
+            cycle_index += 1
+            if watch:
+                print(
+                    f"\n==================== [Posting Cycle #{cycle_index}] ====================",
+                    flush=True,
+                )
             if not workflow_ready or time.monotonic() >= next_credential_check:
                 try:
                     refreshed = Settings.from_env(override=True)
@@ -381,6 +389,10 @@ async def run_file_queue(
                 flush=True,
             )
 
+            # Sync ledger and queue to git repository after each cycle
+            with suppress(Exception):
+                sync_and_commit(settings)
+
             if not watch:
                 print(
                     "\n=================================================================================\n"
@@ -392,6 +404,14 @@ async def run_file_queue(
                 )
                 success = any(j.status.value == "completed" for j in repository.list_recent(0, limit=5))
                 return 0 if (not any_failures or success) else 1
+
+            if settings.max_continuous_cycles > 0 and cycle_index >= settings.max_continuous_cycles:
+                print(
+                    f"\n[Cycle] Completed {cycle_index} continuous cycles in this session. "
+                    "Exiting cleanly so workflow relay / cache can persist.",
+                    flush=True,
+                )
+                return 0
 
             # In continuous mode, sleep for the cycle interval (50 minutes)
             sleep_duration = settings.cycle_interval_seconds

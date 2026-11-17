@@ -2,8 +2,8 @@ name: 🚀 Autopilot — Autonomous Video Engine
 
 on:
   schedule:
-    # Autonomous 24/7 drip cycle: runs every hour to post 1 video and maintain pending buffer
-    - cron: '0 * * * *'
+    # 24/7 Watchdog Heartbeat: ensures continuous 50-minute posting engine is always active
+    - cron: '*/30 * * * *'
   push:
     paths:
       - 'links.txt'
@@ -16,11 +16,11 @@ on:
       mode:
         description: 'Execution mode'
         required: true
-        default: 'once'
+        default: 'continuous_50min'
         type: choice
         options:
-          - once
           - continuous_50min
+          - once
 
 concurrency:
   group: money-printer-pipeline
@@ -28,12 +28,13 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   run-pipeline:
     name: 🎬 Autopilot, Clip & Multi-Post
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
 
     env:
       RIGHTS_ACKNOWLEDGED: 'true'
@@ -42,6 +43,7 @@ jobs:
       UPLOAD_FACEBOOK: 'true'
       CYCLE_INTERVAL_MINUTES: '50'
       MAX_UPLOADS_PER_CYCLE: '1'
+      MAX_CONTINUOUS_CYCLES: '5'
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GROQ_MODEL: 'qwen/qwen3.8-27b'
@@ -124,6 +126,7 @@ jobs:
           path: |
             work/jobs.db
             work/jobs
+            work/pending_uploads
           key: jobs-db-${{ github.run_id }}
           restore-keys: |
             jobs-db-
@@ -159,12 +162,12 @@ jobs:
 
       - name: ⚡ Execute Autonomous Drip Pipeline
         run: |
-          if [ "${{ inputs.mode }}" = "continuous_50min" ]; then
-            echo "Running in continuous watching mode (50-minute drip cycles)..."
-            timeout 10000s python main.py || true
-          else
+          if [ "${{ inputs.mode }}" = "once" ]; then
             echo "Running single drip cycle (--once)..."
             python -m shorts_bot.file_queue --once
+          else
+            echo "Running continuous 50-minute drip engine..."
+            python main.py
           fi
 
       - name: 📊 Publish Markdown Mission Control Summary
@@ -185,4 +188,12 @@ jobs:
         if: always()
         run: |
           python -m shorts_bot.sync_ledger
+
+      - name: 🔁 Dispatch Next Cycle Relay
+        if: always() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.PAT || secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Dispatching relay runner to keep the 50-minute cycle active 24/7..."
+          gh workflow run autopilot.yml -f mode=continuous_50min || true
 
