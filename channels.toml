@@ -49,19 +49,19 @@ ignore_shorts = true            # Strictly filter out Shorts; only take full-len
 queue_latest_on_start = true    # Automatically queues latest videos on start, no manual links.txt entry needed!
 
 [[autopilot.channels]]
-name = "MrBeast"
-channel_id = "UCX6OQ3DkcsbYNE6H8uQQuVA"
-handle = "@MrBeast"
+name = "TGG"
+channel_id = "UChLDRvS2OeJ0f5Xi2j7uofA"
+handle = "@TGG"
 
 [[autopilot.channels]]
-name = "Outdoor Boys"
-channel_id = "UCfpCQ89W9wjkHc8J_6eTbBg"
-handle = "@OutdoorBoys"
+name = "DarkViperAU"
+channel_id = "UCV6mNrW8CrmWtcxWfQXy11g"
+handle = "@DarkViperAU"
 
 [[autopilot.channels]]
-name = "Nick DiGiovanni"
-channel_id = "UCMyOj6fhvKFMjxUCp3b_3gA"
-handle = "@NickDiGiovanni"
+name = "Typical Gamer"
+channel_id = "UC2wKfjlioOCLP4xQMOWNcgg"
+handle = "@TypicalGamer"
 
 [[autopilot.channels]]
 name = "IShowSpeed"
@@ -74,67 +74,27 @@ channel_id = "UCI86prlqXhbkREDMTaORvLQ"
 handle = "@BeastBoyShub"
 
 [[autopilot.channels]]
-name = "GothamChess"
-channel_id = "UCQHX6ViZmPsWiYSFAyS0a3Q"
-handle = "@GothamChess"
+name = "GTA Series Videos"
+channel_id = "UCuWcjpKbIDAbZfHoru1toFg"
+handle = "@GTASeriesVideos"
 
 [[autopilot.channels]]
-name = "Dream"
-channel_id = "UCTkXRDQl0luXxVQrRQvWS6w"
-handle = "@Dream"
+name = "RadShed"
+channel_id = "UC0uIpFajGIq03LY2EEgA1Gg"
+handle = "@RadShed"
 
 [[autopilot.channels]]
-name = "Not Your Type"
-channel_id = "UCKnNrlSJF_hWoBSz1lY_D7g"
-handle = "@notyourtype"
+name = "Astro Soup"
+channel_id = "UCo7Chok8a-Q_Nvtf4PYt0WQ"
+handle = "@AstroSoup"
 
 [[autopilot.channels]]
-name = "HardToonz"
-channel_id = "UCIPqzmQYnE2HyZyLkoCJ3Iw"
-handle = "@HardToonz"
+name = "Badger Goodger"
+channel_id = "UCVu0MlrvD-2siRakaJ6JeoA"
+handle = "@BadgerGoodger"
 
 [[autopilot.channels]]
-name = "Samay Raina"
-channel_id = "UCAov2BBv1ZJav0c_yHEciAw"
-handle = "@SamayRainaOfficial"
-
-[[autopilot.channels]]
-name = "CarryMinati"
-channel_id = "UCj22tfcQrWG7EMEKS0qLeEg"
-handle = "@CarryMinati"
-
-[[autopilot.channels]]
-name = "Warangal Diaries"
-channel_id = "UCWSyWK6oS5VL3RrJZuWsdSA"
-handle = "@WarangalDiaries"
-
-[[autopilot.channels]]
-name = "DiscoveryChannelInd"
-channel_id = "UCBLF5teKEUzTN5gZ2zgR0kQ"
-handle = "@discoverychannelind"
-
-[[autopilot.channels]]
-name = "Shakeel Bhai"
-channel_id = "UCAkMKodEd1z5lDo-e0MY5WA"
-handle = "@shakeelbhaiofficial"
-
-[[autopilot.channels]]
-name = "Grox"
-channel_id = "UCK5vUVoJsEVc7JeXQ8XiX7w"
-handle = "@groxmc"
-
-[[autopilot.channels]]
-name = "Wemmbu"
-channel_id = "UCkzzNLnuM-VsATWC53ehwOQ"
-handle = "@wemmbumc"
-
-[[autopilot.channels]]
-name = "FlameFrags"
-channel_id = "UCvYPobTo42NM36X7VC4dLhA"
-handle = "@flamefragsmc"
-
-[[autopilot.channels]]
-name = "Donut"
-channel_id = "UCL6JmiMXKoXS6bpP1D3bk8g"
-handle = "@donut"
+name = "Vikkstar123"
+channel_id = "UCvwgF_0NOZe2vN4Q3g1bY-A"
+handle = "@Vikkstar123"
 

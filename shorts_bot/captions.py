@@ -132,21 +132,32 @@ class TimedSegment:
     words: tuple[TimedWord, ...] = ()
 
 
+VIRAL_FONTS: tuple[str, ...] = (
+    "Impact",
+    "Arial Black",
+    "Trebuchet MS",
+    "Verdana",
+    "Arial",
+)
+
+
 @dataclass(frozen=True, slots=True)
 class CaptionStyle:
-    font_name: str = "Arial"
-    font_size: int = 64
+    font_name: str = "Arial Black"
+    font_size: int = 58
     primary_color: str = COLOR_WHITE
     outline_color: str = COLOR_BLACK
-    outline_width: int = 5
-    shadow_depth: int = 2
-    alignment: int = 5  # 5 = Center of screen (y = 960 in 1080x1920)
-    margin_v: int = 0
+    outline_width: int = 4
+    shadow_depth: int = 0
+    alignment: int = 2  # 2 = Bottom Center (in bottom black screen)
+    margin_v: int = 280  # Positioned inside bottom black screen
     margin_l: int = 60
     margin_r: int = 60
     highlight_colors: tuple[str, ...] = DEFAULT_HIGHLIGHT_COLORS
     max_words_per_line: int = 3
     max_lines_per_chunk: int = 2
+    enable_glow: bool = True
+    rotating_fonts: tuple[str, ...] = VIRAL_FONTS
 
 
 def format_ass_time(seconds: float) -> str:
@@ -384,11 +395,19 @@ def build_ass_subtitles(
     ]
 
     color_idx = 0
+    font_idx = 0
     num_colors = len(style.highlight_colors) if style.highlight_colors else 1
+    num_fonts = len(style.rotating_fonts) if style.rotating_fonts else 1
 
     for chunk in chunks:
         if not chunk:
             continue
+        chunk_font = (
+            style.rotating_fonts[font_idx % num_fonts]
+            if style.rotating_fonts
+            else style.font_name
+        )
+        font_idx += 1
         # Chunk overall duration
         chunk_start = chunk[0].start
         chunk_end = max(chunk_start + 0.3, chunk[-1].end)
@@ -418,8 +437,11 @@ def build_ass_subtitles(
             for j, _ in enumerate(chunk):
                 w_clean = chunk_texts[j]
                 if j == i:
-                    # Highlighted active word!
-                    formatted_words.append(f"{{\\c{highlight_col}}}{w_clean}{{\\c{style.primary_color}}}")
+                    # Glowing active word with slight scale pop
+                    glow_tag = "\\blur5\\fscx112\\fscy112" if style.enable_glow else ""
+                    formatted_words.append(
+                        f"{{\\c{highlight_col}\\3c{highlight_col}{glow_tag}}}{w_clean}{{\\r\\c{style.primary_color}\\fn{chunk_font}\\blur2}}"
+                    )
                 else:
                     formatted_words.append(w_clean)
 
@@ -427,9 +449,9 @@ def build_ass_subtitles(
                 split_at = style.max_words_per_line
                 line1 = " ".join(formatted_words[:split_at])
                 line2 = " ".join(formatted_words[split_at:])
-                display_text = f"{{\\c{style.primary_color}}}{line1}\\N{line2}"
+                display_text = f"{{\\fn{chunk_font}\\blur2\\c{style.primary_color}}}{line1}\\N{line2}"
             else:
-                display_text = f"{{\\c{style.primary_color}}}" + " ".join(formatted_words)
+                display_text = f"{{\\fn{chunk_font}\\blur2\\c{style.primary_color}}}" + " ".join(formatted_words)
 
             start_str = format_ass_time(w_start)
             end_str = format_ass_time(w_end)

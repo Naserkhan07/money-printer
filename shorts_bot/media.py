@@ -122,7 +122,7 @@ class MediaProcessor:
             else None
         )
 
-        use_gameplay = (self.video_layout == "split_gameplay") or (gameplay_video is not None)
+        use_gameplay = (self.video_layout == "split_gameplay") and (gameplay_video is not None)
         if use_gameplay and gameplay_video is not None:
             command = [
                 self.ffmpeg,

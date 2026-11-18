@@ -2,8 +2,8 @@ name: 🚀 Autopilot — Autonomous Video Engine
 
 on:
   schedule:
-    # 24/7 Watchdog Heartbeat: ensures continuous 50-minute posting engine is always active
-    - cron: '*/30 * * * *'
+    # 24/7 Watchdog Heartbeat: ensures continuous 30-minute posting engine is always active
+    - cron: '*/25 * * * *'
   push:
     paths:
       - 'links.txt'
@@ -16,10 +16,10 @@ on:
       mode:
         description: 'Execution mode'
         required: true
-        default: 'continuous_50min'
+        default: 'continuous_30min'
         type: choice
         options:
-          - continuous_50min
+          - continuous_30min
           - once
 
 concurrency:
@@ -41,23 +41,23 @@ jobs:
       UPLOAD_YOUTUBE: 'true'
       UPLOAD_INSTAGRAM: 'true'
       UPLOAD_FACEBOOK: 'true'
-      CYCLE_INTERVAL_MINUTES: '50'
-      MAX_UPLOADS_PER_CYCLE: '1'
-      MAX_CONTINUOUS_CYCLES: '5'
+      CYCLE_INTERVAL_MINUTES: '30'
+      MAX_UPLOADS_PER_CYCLE: '2'
+      MAX_CONTINUOUS_CYCLES: '8'
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GROQ_MODEL: 'qwen/qwen3.8-27b'
       GROQ_FALLBACK_MODEL: 'qwen/qwen3.8-27b'
       GROQ_METADATA_DELAY_SECONDS: '1'
       SHORTS_SELECTION_MODE: 'ai_highlights'
-      MAX_SHORTS_PER_VIDEO: '3'
+      MAX_SHORTS_PER_VIDEO: '5'
       CLIP_DURATION_SECONDS: '60'
-      VIDEO_LAYOUT: 'split_gameplay'
-      ENABLE_GAMEPLAY: 'true'
+      VIDEO_LAYOUT: 'fit_black'
+      ENABLE_GAMEPLAY: 'false'
       GAMEPLAY_ROTATION: 'gta5,minecraft,subway_surfers'
       ENABLE_CAPTIONS: 'true'
-      CAPTION_FONT: 'Arial'
-      CAPTION_FONT_SIZE: '64'
+      CAPTION_FONT: 'Arial Black'
+      CAPTION_FONT_SIZE: '58'
       CAPTION_HIGHLIGHT_COLORS: '&H0066FF00&,&H0000E6FF&,&H00FFFF00&'
       VIDEO_CRF: '22'
       VIDEO_PRESET: 'veryfast'
@@ -166,7 +166,7 @@ jobs:
             echo "Running single drip cycle (--once)..."
             python -m shorts_bot.file_queue --once
           else
-            echo "Running continuous 50-minute drip engine..."
+            echo "Running continuous 30-minute drip engine..."
             python main.py
           fi
 
@@ -194,6 +194,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT || secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          echo "Dispatching relay runner to keep the 50-minute cycle active 24/7..."
-          gh workflow run autopilot.yml -f mode=continuous_50min || true
+          echo "Dispatching relay runner to keep the 30-minute cycle active 24/7..."
+          gh workflow run autopilot.yml -f mode=continuous_30min || true
 

@@ -297,9 +297,10 @@ class AutopilotService:
                     vid = data.get("id")
                     title = data.get("title", "")
                     live_status = str(data.get("live_status") or "").lower()
-                    if live_status in ("is_upcoming", "is_live", "post_live") or data.get("was_live"):
+                    # Only skip currently active live broadcasts or upcoming premiere events
+                    if live_status in ("is_upcoming", "is_live"):
                         continue
-                    if "live event" in title.lower() or "premieres in" in title.lower():
+                    if "live event will begin" in title.lower() or "premieres in" in title.lower():
                         continue
                     dur = float(data.get("duration") or 0.0)
                     is_short = (0 < dur <= 60.0) or ("#shorts" in title.lower()) or ("/shorts/" in str(data.get("webpage_url") or ""))

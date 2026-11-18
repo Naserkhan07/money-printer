@@ -646,6 +646,8 @@ class WorkflowPipeline:
                             font_name=self.settings.caption_font,
                             font_size=self.settings.caption_font_size,
                             highlight_colors=self.settings.caption_highlight_colors,
+                            alignment=2 if self.settings.video_layout == "fit_black" else 5,
+                            margin_v=280 if self.settings.video_layout == "fit_black" else 0,
                         )
                         create_caption_file(
                             output_path=ass_file,

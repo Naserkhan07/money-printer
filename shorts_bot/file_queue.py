@@ -27,12 +27,46 @@ class LinkFileQueue:
         self.links_file = links_file
         self.downloaded_log = downloaded_log
 
+    def downloaded_identifiers(self) -> set[str]:
+        if not self.downloaded_log.exists():
+            return set()
+        seen: set[str] = set()
+        for line in self.downloaded_log.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 3:
+                u = parts[2].strip().rstrip("/")
+                if u:
+                    seen.add(u)
+                    if "v=" in u:
+                        vid = u.split("v=")[1].split("&")[0].strip()
+                        if vid:
+                            seen.add(vid)
+                    elif "youtu.be/" in u:
+                        vid = u.split("youtu.be/")[1].split("?")[0].strip()
+                        if vid:
+                            seen.add(vid)
+        return seen
+
     def pending_urls(self) -> list[str]:
         lines = self.links_file.read_text(encoding="utf-8").splitlines()
         urls: list[str] = []
+        already_downloaded = self.downloaded_identifiers()
         for line in lines:
             candidate = line.strip()
             if not candidate or candidate.startswith("#"):
+                continue
+            cand_norm = candidate.rstrip("/")
+            cand_vid = ""
+            if "v=" in cand_norm:
+                cand_vid = cand_norm.split("v=")[1].split("&")[0].strip()
+            elif "youtu.be/" in cand_norm:
+                cand_vid = cand_norm.split("youtu.be/")[1].split("?")[0].strip()
+
+            if cand_norm in already_downloaded or (cand_vid and cand_vid in already_downloaded):
+                print(f"Skipping already-posted video URL: {candidate}", flush=True)
                 continue
             if is_youtube_url(candidate) and candidate not in urls:
                 urls.append(candidate)
@@ -208,7 +242,7 @@ async def run_file_queue(
             youtube=youtube_ready,
             instagram=instagram_ready,
             facebook=facebook_ready,
-            limit=1,
+            limit=max_uploads,
         )
         posted_any = False
         for pending_job in pending_jobs:

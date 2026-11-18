@@ -145,8 +145,8 @@ class Settings:
     caption_font: str
     caption_font_size: int
     caption_highlight_colors: tuple[str, ...]
-    cycle_interval_minutes: int = 50
-    max_uploads_per_cycle: int = 1
+    cycle_interval_minutes: int = 30
+    max_uploads_per_cycle: int = 2
     max_continuous_cycles: int = 0
     scheduler_enabled: bool = False
     scheduler_advance_prep_minutes: int = 60
@@ -307,8 +307,8 @@ class Settings:
             shorts_selection_mode=os.getenv("SHORTS_SELECTION_MODE", "ai_highlights")
             .strip()
             .lower(),
-            max_shorts_per_video=_int_env("MAX_SHORTS_PER_VIDEO", 3),
-            video_layout=os.getenv("VIDEO_LAYOUT", "split_gameplay").strip().lower(),
+            max_shorts_per_video=_int_env("MAX_SHORTS_PER_VIDEO", 5),
+            video_layout=os.getenv("VIDEO_LAYOUT", "fit_black").strip().lower(),
             video_allow_upscale=_bool_env("VIDEO_ALLOW_UPSCALE", False),
             video_crf=_int_env("VIDEO_CRF", 22),
             video_preset=os.getenv("VIDEO_PRESET", "veryfast").strip().lower(),
@@ -371,10 +371,10 @@ class Settings:
                 for s in os.getenv("GAMEPLAY_ROTATION", "gta5,minecraft,subway_surfers").split(",")
                 if s.strip()
             ),
-            enable_gameplay=_bool_env("ENABLE_GAMEPLAY", True),
+            enable_gameplay=_bool_env("ENABLE_GAMEPLAY", False),
             enable_captions=_bool_env("ENABLE_CAPTIONS", True),
-            caption_font=os.getenv("CAPTION_FONT", "Arial").strip(),
-            caption_font_size=_int_env("CAPTION_FONT_SIZE", 64),
+            caption_font=os.getenv("CAPTION_FONT", "Arial Black").strip(),
+            caption_font_size=_int_env("CAPTION_FONT_SIZE", 58),
             caption_highlight_colors=tuple(
                 c.strip()
                 for c in os.getenv(
@@ -414,8 +414,8 @@ class Settings:
             freellmapi_url=resolved_freellm_url,
             freellmapi_api_key=resolved_freellm_key,
             freellmapi_model=resolved_freellm_model,
-            cycle_interval_minutes=_int_env("CYCLE_INTERVAL_MINUTES", 50),
-            max_uploads_per_cycle=_int_env("MAX_UPLOADS_PER_CYCLE", 1),
+            cycle_interval_minutes=_int_env("CYCLE_INTERVAL_MINUTES", 30),
+            max_uploads_per_cycle=_int_env("MAX_UPLOADS_PER_CYCLE", 2),
             max_continuous_cycles=_int_env("MAX_CONTINUOUS_CYCLES", 0),
         )
         settings.validate_common()
