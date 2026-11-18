@@ -212,11 +212,11 @@ class AIPlanner:
             full_transcript = ""
 
         possible_clips = max(1, int(source.duration_seconds // self.target_duration))
-        target_clips = min(max_clips or 100, possible_clips)
+        target_clips = min(max_clips if max_clips > 0 else 300, possible_clips)
 
-        # If transcript is empty or unavailable, fall back to smart timeline segment plans immediately
-        if not full_transcript.strip():
-            logger.info("Proceeding with timeline coverage plans for %s", source.title)
+        # If full timeline stream coverage is requested or clips exceed single-prompt limits, use full coverage
+        if target_clips > 8 or not full_transcript.strip():
+            logger.info("Proceeding with full timeline stream coverage plans for %s (%d clips)", source.title, target_clips)
             base_plans = full_coverage_plans(
                 source,
                 target_duration=self.target_duration,
@@ -831,7 +831,7 @@ def full_coverage_plans(
     else:
         natural_count = max(1, int(total // target_duration))
 
-    platform_ceiling = 100
+    platform_ceiling = 300
     requested_ceiling = max_clips if max_clips > 0 else platform_ceiling
     count = min(natural_count, requested_ceiling, platform_ceiling)
 

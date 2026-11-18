@@ -304,10 +304,10 @@ class Settings:
             instagram_caption_target_chars=_int_env("INSTAGRAM_CAPTION_TARGET_CHARS", 2_000),
             groq_metadata_delay_seconds=_int_env("GROQ_METADATA_DELAY_SECONDS", 1),
             clip_duration_seconds=_int_env("CLIP_DURATION_SECONDS", 60),
-            shorts_selection_mode=os.getenv("SHORTS_SELECTION_MODE", "ai_highlights")
+            shorts_selection_mode=os.getenv("SHORTS_SELECTION_MODE", "full_coverage")
             .strip()
             .lower(),
-            max_shorts_per_video=_int_env("MAX_SHORTS_PER_VIDEO", 5),
+            max_shorts_per_video=_int_env("MAX_SHORTS_PER_VIDEO", 0),
             video_layout=os.getenv("VIDEO_LAYOUT", "fit_black").strip().lower(),
             video_allow_upscale=_bool_env("VIDEO_ALLOW_UPSCALE", False),
             video_crf=_int_env("VIDEO_CRF", 22),
@@ -434,8 +434,8 @@ class Settings:
             raise ConfigurationError(
                 "SHORTS_SELECTION_MODE must be full_coverage or ai_highlights."
             )
-        if not 0 <= self.max_shorts_per_video <= 100:
-            raise ConfigurationError("MAX_SHORTS_PER_VIDEO must be between 0 and 100.")
+        if not 0 <= self.max_shorts_per_video <= 500:
+            raise ConfigurationError("MAX_SHORTS_PER_VIDEO must be between 0 and 500.")
         if self.video_layout not in {
             "split_gameplay",
             "fit_black",
