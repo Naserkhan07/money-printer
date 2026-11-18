@@ -49,6 +49,56 @@ ignore_shorts = true            # Strictly filter out Shorts; only take full-len
 queue_latest_on_start = true    # Automatically queues latest videos on start, no manual links.txt entry needed!
 
 [[autopilot.channels]]
+name = "Techno Gamerz"
+channel_id = "UCX8pnu3DYUnx8qy8V_c6oHg"
+handle = "@TechnoGamerzOfficial"
+
+[[autopilot.channels]]
+name = "CarryisLive"
+channel_id = "UC0IWRLai-BAwci_e9MylNGw"
+handle = "@CarryisLive"
+
+[[autopilot.channels]]
+name = "Mortal"
+channel_id = "UCM9AAVUfidrKTD4-W73e_HA"
+handle = "@MortalgamingYT"
+
+[[autopilot.channels]]
+name = "Scout"
+channel_id = "UCgcF9fEt9IKZeT4qXk6-N0w"
+handle = "@scoutofficial"
+
+[[autopilot.channels]]
+name = "Live Insaan"
+channel_id = "UCFwKgzKe-EdTz83r6wzhmOw"
+handle = "@LiveInsaan"
+
+[[autopilot.channels]]
+name = "Mythpat"
+channel_id = "UCx6F-rETGiz7xf_vkMmX2yQ"
+handle = "@Mythpat"
+
+[[autopilot.channels]]
+name = "Total Gaming"
+channel_id = "UC5c9VlYTSvBSCaoMu_GI6gQ"
+handle = "@TotalGaming093"
+
+[[autopilot.channels]]
+name = "TheRawKnee Games"
+channel_id = "UCZaHw7tdjy3TNMH3ncsI4Bg"
+handle = "@TheRawKneeGames"
+
+[[autopilot.channels]]
+name = "Chapati Hindustani Gamer"
+channel_id = "UC3MTnx9PIs8_9w24mKADZiQ"
+handle = "@ChapatiHindustaniGamer"
+
+[[autopilot.channels]]
+name = "GamerFleet"
+channel_id = "UCWxcAUWjF3B_S6fFLqOh7Rw"
+handle = "@GamerFleet"
+
+[[autopilot.channels]]
 name = "TGG"
 channel_id = "UChLDRvS2OeJ0f5Xi2j7uofA"
 handle = "@TGG"
