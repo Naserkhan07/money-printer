@@ -3,3 +3,9 @@
 # Downloaded URLs are recorded in work/downloaded-links.log.
 https://www.youtube.com/watch?v=PHSsdHu2Er0
 https://www.youtube.com/watch?v=qSyo5d-dVzA
+https://www.youtube.com/watch?v=ELmX_FgwQQs
+https://www.youtube.com/watch?v=JjFIAeDD7P0
+https://www.youtube.com/watch?v=YN7ITZKzgRQ
+https://www.youtube.com/watch?v=FTfLfmMrnXw
+https://www.youtube.com/watch?v=JGxRvfuEK7g
+https://www.youtube.com/watch?v=Zdg_Fra4G4c
