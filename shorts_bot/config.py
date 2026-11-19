@@ -148,6 +148,7 @@ class Settings:
     cycle_interval_minutes: int = 30
     max_uploads_per_cycle: int = 2
     max_continuous_cycles: int = 0
+    gta_only: bool = True
     scheduler_enabled: bool = False
     scheduler_advance_prep_minutes: int = 60
     scheduler_max_daily_youtube: int = 50
@@ -417,6 +418,7 @@ class Settings:
             cycle_interval_minutes=_int_env("CYCLE_INTERVAL_MINUTES", 30),
             max_uploads_per_cycle=_int_env("MAX_UPLOADS_PER_CYCLE", 2),
             max_continuous_cycles=_int_env("MAX_CONTINUOUS_CYCLES", 0),
+            gta_only=_bool_env("GTA_ONLY", True),
         )
         settings.validate_common()
         return settings

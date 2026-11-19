@@ -20,6 +20,7 @@ from .downloader import VideoDownloader
 from .enhancer import APIMarketVideoEnhancer, CloudinaryTemporaryVideoHost
 from .errors import UploadError, UploadLimitError, WorkflowError
 from .facebook import FacebookReelUploader
+from .filters import is_gta_content
 from .gameplay import GameplayManager
 from .instagram import InstagramUploader
 from .media import MediaProcessor
@@ -260,6 +261,13 @@ class WorkflowPipeline:
                 downloaded_job = self.repository.update(job.id, source_title=source.title)
                 if self.on_downloaded:
                     await self.on_downloaded(downloaded_job, source)
+
+            if self.settings.gta_only and not is_gta_content(source.title):
+                logger.info("[%s] '%s' is not GTA content; skipping in GTA-only mode.", job.id, source.title)
+                await self._status(job.id, JobStatus.FAILED, f"Skipped non-GTA video: {source.title}")
+                with suppress(Exception):
+                    source.path.unlink(missing_ok=True)
+                return job
 
             full_transcript: str | None = None
             audio_path = job_dir / "transcript-audio.mp3"

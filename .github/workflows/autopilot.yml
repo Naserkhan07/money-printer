@@ -44,6 +44,7 @@ jobs:
       CYCLE_INTERVAL_MINUTES: '30'
       MAX_UPLOADS_PER_CYCLE: '2'
       MAX_CONTINUOUS_CYCLES: '8'
+      GTA_ONLY: 'true'
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GROQ_MODEL: 'qwen/qwen3.8-27b'

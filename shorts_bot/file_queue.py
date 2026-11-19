@@ -14,6 +14,7 @@ from .config import Settings
 from .db import JobRepository
 from .downloader import is_youtube_url
 from .errors import ConfigurationError, WorkflowError
+from .filters import is_gta_content
 from .models import Job, SourceVideo
 from .pipeline import WorkflowPipeline, WorkflowServices
 from .spool import SpoolWatcher
@@ -50,14 +51,19 @@ class LinkFileQueue:
                             seen.add(vid)
         return seen
 
-    def pending_urls(self) -> list[str]:
+    def pending_urls(self, gta_only: bool = True) -> list[str]:
         lines = self.links_file.read_text(encoding="utf-8").splitlines()
         urls: list[str] = []
         already_downloaded = self.downloaded_identifiers()
+        last_comment = ""
         for line in lines:
-            candidate = line.strip()
-            if not candidate or candidate.startswith("#"):
+            line_str = line.strip()
+            if not line_str:
                 continue
+            if line_str.startswith("#"):
+                last_comment = line_str
+                continue
+            candidate = line_str
             cand_norm = candidate.rstrip("/")
             cand_vid = ""
             if "v=" in cand_norm:
@@ -68,6 +74,11 @@ class LinkFileQueue:
             if cand_norm in already_downloaded or (cand_vid and cand_vid in already_downloaded):
                 print(f"Skipping already-posted video URL: {candidate}", flush=True)
                 continue
+
+            if gta_only and last_comment and "[Autopilot:" in last_comment and not is_gta_content(last_comment):
+                print(f"Skipping non-GTA URL from queue: {last_comment}", flush=True)
+                continue
+
             if is_youtube_url(candidate) and candidate not in urls:
                 urls.append(candidate)
             else:
@@ -246,6 +257,12 @@ async def run_file_queue(
         )
         posted_any = False
         for pending_job in pending_jobs:
+            if settings.gta_only and not is_gta_content(pending_job.source_title or ""):
+                print(
+                    f"[{pending_job.id}] Skipping non-GTA pending upload: {pending_job.source_title}",
+                    flush=True,
+                )
+                continue
             print(
                 f"[{pending_job.id}] Posting 1 video from pending uploads...",
                 flush=True,
@@ -368,7 +385,7 @@ async def run_file_queue(
             # Prepare that whole video into all clips (e.g. 3 shorts).
             # If we haven't posted yet this cycle, post 1 clip now!
             # Put the rest of the clips in the pending upload folder.
-            urls = link_queue.pending_urls()
+            urls = link_queue.pending_urls(gta_only=settings.gta_only)
             processed_new_url = False
             for url in urls:
                 if url in failed_urls_this_session:

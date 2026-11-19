@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import Settings
+from .filters import is_gta_content
 from .db import JobRepository
 
 logger = logging.getLogger(__name__)
@@ -143,6 +144,7 @@ class AutopilotService:
         queue_latest_on_start: bool = False,
         enabled: bool = True,
         youtube_client: Any = None,
+        gta_only: bool = True,
     ) -> None:
         self.channels = channels
         self.repository = repository
@@ -151,6 +153,7 @@ class AutopilotService:
         self.queue_latest_on_start = queue_latest_on_start
         self.enabled = enabled
         self.youtube_client = youtube_client
+        self.gta_only = gta_only
 
     @property
     def poll_interval_seconds(self) -> int:
@@ -180,6 +183,7 @@ class AutopilotService:
             queue_latest_on_start=settings.autopilot_queue_latest_on_start,
             enabled=settings.autopilot_enabled,
             youtube_client=yt_client,
+            gta_only=settings.gta_only,
         )
 
     def _fetch_channel_videos_api(
@@ -433,6 +437,8 @@ class AutopilotService:
 
             videos = sorted(videos, key=lambda x: x.published_at or "", reverse=True)
             eligible = [v for v in videos if not (self.ignore_shorts and v.is_short)]
+            if self.gta_only:
+                eligible = [v for v in eligible if is_gta_content(v.title)]
             if not eligible:
                 continue
 
@@ -513,6 +519,8 @@ class AutopilotService:
 
             videos = sorted(videos, key=lambda x: x.published_at or "", reverse=True)
             eligible = [v for v in videos if not (self.ignore_shorts and v.is_short)]
+            if self.gta_only:
+                eligible = [v for v in eligible if is_gta_content(v.title)]
             if not eligible:
                 continue
 

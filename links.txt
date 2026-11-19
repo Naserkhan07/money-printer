@@ -1,14 +1,5 @@
 # Add one authorized YouTube video URL per line below.
 # A URL is removed atomically as soon as that video has downloaded successfully.
 # Downloaded URLs are recorded in work/downloaded-links.log.
-https://www.youtube.com/watch?v=PHSsdHu2Er0
+# [Autopilot: Typical Gamer] 🔴PLAYING GTA 6 EARLY ACCESS GAMEPLAY GET IN HERE!
 https://www.youtube.com/watch?v=qSyo5d-dVzA
-https://www.youtube.com/watch?v=ELmX_FgwQQs
-https://www.youtube.com/watch?v=JjFIAeDD7P0
-https://www.youtube.com/watch?v=YN7ITZKzgRQ
-https://www.youtube.com/watch?v=FTfLfmMrnXw
-https://www.youtube.com/watch?v=JGxRvfuEK7g
-https://www.youtube.com/watch?v=Zdg_Fra4G4c
-https://www.youtube.com/watch?v=LuCs8uyR3s8
-https://www.youtube.com/watch?v=rTIGkP4TYbA
-https://www.youtube.com/watch?v=v8Y2ZzpT8GU
