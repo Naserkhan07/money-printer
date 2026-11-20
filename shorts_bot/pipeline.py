@@ -337,6 +337,19 @@ class WorkflowPipeline:
             total_clips = len(clips)
             metadata_requests = 0
             for clip in clips:
+                # When retrying existing pending clips, stop as soon as this cycle's upload target is reached
+                if (
+                    reuse_downloaded
+                    and uploaded_platforms_this_run
+                    and max(uploaded_platforms_this_run.values(), default=0) >= effective_max_uploads
+                ):
+                    logger.info(
+                        "Cycle upload target reached (%d uploads); stopping pending clip loop for job %s.",
+                        max(uploaded_platforms_this_run.values(), default=0),
+                        job.id,
+                    )
+                    break
+
                 try:
                     if not clip.metadata_ready:
                         if metadata_requests and self.settings.groq_metadata_delay_seconds:
@@ -933,6 +946,7 @@ class WorkflowPipeline:
                     instagram_url=instagram.permalink,
                     error=None,
                 )
+                self._consecutive_ig_failures = 0
                 if hasattr(self.repository, "record_platform_upload"):
                     self.repository.record_platform_upload(
                         "Instagram", job.id, clip.clip_index, instagram.media_id
@@ -960,12 +974,16 @@ class WorkflowPipeline:
                     "Instagram upload limit reached; continuing local generation",
                 )
             except UploadError as exc:
+                self._consecutive_ig_failures = getattr(self, "_consecutive_ig_failures", 0) + 1
                 await self._status(
                     job.id,
                     JobStatus.UPLOADING,
                     f"Instagram Reel {clip.clip_index}/{total_clips} failed; its upload remains "
                     f"pending, and the bot will continue with the next Reel: {exc}",
                 )
+                if self._consecutive_ig_failures >= 2:
+                    logger.warning("Instagram failed 2 times consecutively; pausing Instagram for this cycle.")
+                    blocked_platforms["Instagram"] = str(exc)
 
         # Facebook Upload gating
         can_upload_facebook = bool(

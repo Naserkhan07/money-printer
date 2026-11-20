@@ -42,7 +42,7 @@ jobs:
       UPLOAD_INSTAGRAM: 'true'
       UPLOAD_FACEBOOK: 'true'
       CYCLE_INTERVAL_MINUTES: '30'
-      MAX_UPLOADS_PER_CYCLE: '2'
+      MAX_UPLOADS_PER_CYCLE: '1'
       MAX_CONTINUOUS_CYCLES: '8'
       GTA_ONLY: 'true'
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -128,9 +128,9 @@ jobs:
             work/jobs.db
             work/jobs
             work/pending_uploads
-          key: jobs-db-${{ github.run_id }}
+          key: jobs-v2-gta-${{ github.run_id }}
           restore-keys: |
-            jobs-db-
+            jobs-v2-gta-
 
       - name: 📁 Prepare Directories & Credentials
         run: |
@@ -150,8 +150,8 @@ jobs:
           fi
 
           if [ "$GTA_ONLY" = "true" ]; then
-            echo "Cleaning non-GTA legacy pending upload folders..."
-            rm -rf work/pending_uploads/*Hunger* work/pending_uploads/*hunger* work/pending_uploads/*Beast* work/pending_uploads/*beast* || true
+            echo "Purging legacy pre-rendered jobs to enforce new translucent blurred background layout..."
+            rm -rf work/jobs/* work/pending_uploads/* || true
           fi
 
 
