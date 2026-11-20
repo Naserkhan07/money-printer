@@ -253,7 +253,7 @@ async def run_file_queue(
             youtube=youtube_ready,
             instagram=instagram_ready,
             facebook=facebook_ready,
-            limit=max_uploads,
+            limit=max(100, max_uploads * 20),
         )
         posted_any = False
         for pending_job in pending_jobs:
@@ -402,13 +402,20 @@ async def run_file_queue(
                 )
                 if result.error:
                     failed_urls_this_session.add(url)
-                    if "live event will begin" in result.error.lower() or "premieres in" in result.error.lower() or "scheduled livestream" in result.error.lower() or "video is unavailable" in result.error.lower():
-                        # A scheduled livestream or unavailable video cannot be downloaded. Remove from links.txt to unblock the pipeline.
+                    if (
+                        "live event will begin" in result.error.lower()
+                        or "premieres in" in result.error.lower()
+                        or "scheduled livestream" in result.error.lower()
+                        or "private video" in result.error.lower()
+                        or "account has been terminated" in result.error.lower()
+                        or "removed by the user" in result.error.lower()
+                    ):
+                        # A scheduled livestream, private, or deleted video cannot be downloaded. Remove from links.txt to unblock the pipeline.
                         try:
                             lines = settings.links_file.read_text(encoding="utf-8").splitlines()
                             new_lines = [l for l in lines if l.strip() != url]
                             settings.links_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-                            print(f"[{job.id}] Removed unavailable / scheduled URL from {settings.links_file.name}", flush=True)
+                            print(f"[{job.id}] Removed private / scheduled URL from {settings.links_file.name}", flush=True)
                         except Exception:
                             pass
                     else:

@@ -147,7 +147,8 @@ class VideoDownloader:
         if cookie_file:
             yt_args["player_client"] = ["web", "mweb"]
         else:
-            yt_args["player_client"] = ["mweb", "web", "ios"]
+            # On datacenter IPs (e.g. GitHub Actions), android and ios bypass botguard without cookies
+            yt_args["player_client"] = ["android", "ios", "tv", "mweb"]
 
         po_token = cls._resolve_po_token()
         env_source = "env" if (os.getenv("YOUTUBE_PO_TOKEN") or os.getenv("PO_TOKEN")) else "provider"
@@ -410,8 +411,10 @@ class VideoDownloader:
             detail = str(exc)
             if "live event will begin" in detail.casefold() or "premieres in" in detail.casefold():
                 raise DownloadError(f"Scheduled livestream/premiere cannot be downloaded: {detail}")
-            elif "video is unavailable" in detail.casefold() or "this video is unavailable" in detail.casefold() or "private video" in detail.casefold():
-                raise DownloadError(f"Video is unavailable or private on YouTube: {detail}")
+            elif "is streaming live" in detail.casefold() or "this live event has ended" in detail.casefold():
+                raise DownloadError(f"Live broadcast is currently active or still processing VOD archive: {detail}")
+            elif "private video" in detail.casefold() or "account has been terminated" in detail.casefold() or "removed by the user" in detail.casefold():
+                raise DownloadError(f"Video is private or removed on YouTube: {detail}")
 
             # 2. Progressive single-stream fallback (e.g. 720p/360p pre-merged MP4)
             # Progressive streams avoid DASH fragmentation and SABR chunking that trigger CDN 403 Forbidden.
@@ -419,15 +422,22 @@ class VideoDownloader:
             try:
                 prog_options = dict(options)
                 prog_options["format"] = "22/18/best[height<=720][ext=mp4]/best[ext=mp4]/best"
+                prog_options["no_plugins"] = True
+                ext_args = dict(prog_options.get("extractor_args", {}))
+                ext_args["youtube"] = {"player_client": ["android", "ios"]}
+                ext_args.pop("youtubepot-bgutilhttp", None)
+                prog_options["extractor_args"] = ext_args
                 info = self._extract_info(url, prog_options)
             except Exception as prog_exc:
                 logger.warning("[downloader] Progressive yt-dlp failed (%s); trying iOS/mweb client fallback...", prog_exc)
-                # 3. Alternative client fallback: iOS / mweb
+                # 3. Alternative client fallback: iOS / Android / TV
                 try:
                     ios_options = dict(options)
                     ios_options["format"] = "22/18/best[height<=720]/best"
+                    ios_options["no_plugins"] = True
                     ext_args = dict(ios_options.get("extractor_args", {}))
-                    ext_args["youtube"] = {"player_client": ["ios", "mweb"]}
+                    ext_args["youtube"] = {"player_client": ["android", "ios", "tv"]}
+                    ext_args.pop("youtubepot-bgutilhttp", None)
                     ios_options["extractor_args"] = ext_args
                     info = self._extract_info(url, ios_options)
                 except Exception as ios_exc:

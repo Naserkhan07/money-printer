@@ -214,19 +214,31 @@ class AutopilotService:
                 if item.get("snippet", {}).get("resourceId", {}).get("videoId")
             ]
             durations: dict[str, float] = {}
+            live_states: dict[str, str] = {}
             if video_ids:
                 try:
                     v_res = (
                         self.youtube_client.videos()
-                        .list(id=",".join(video_ids), part="contentDetails")
+                        .list(id=",".join(video_ids), part="snippet,contentDetails,liveStreamingDetails")
                         .execute()
                     )
                     for v_item in v_res.get("items", []):
                         vid = v_item.get("id")
                         dur_str = v_item.get("contentDetails", {}).get("duration", "")
                         durations[vid] = parse_iso8601_duration(dur_str)
+                        v_snip = v_item.get("snippet", {})
+                        live_content = v_snip.get("liveBroadcastContent", "none")
+                        ls_details = v_item.get("liveStreamingDetails", {})
+                        if live_content in ("live", "upcoming"):
+                            live_states[vid] = "is_live"
+                        elif ls_details and ls_details.get("actualStartTime") and not ls_details.get("actualEndTime"):
+                            live_states[vid] = "is_live"
+                        elif dur_str in ("P0D", "PT0S", ""):
+                            live_states[vid] = "is_live"
+                        else:
+                            live_states[vid] = "not_live"
                 except Exception as exc:
-                    logger.debug("Failed fetching video durations for %s: %s", channel.name, exc)
+                    logger.debug("Failed fetching video details for %s: %s", channel.name, exc)
 
             videos: list[AutopilotVideo] = []
             for item in raw_items:
@@ -237,7 +249,13 @@ class AutopilotService:
                 if not vid or title in ("Private video", "Deleted video"):
                     continue
 
+                if live_states.get(vid) == "is_live":
+                    logger.info("[Autopilot] Skipping '%s' from %s: currently live streaming; will clip once stream ends.", title, channel.name)
+                    continue
+
                 duration = durations.get(vid, 0.0)
+                if duration <= 0:
+                    continue
                 is_short = (0 < duration <= 60.0) or ("#shorts" in title.lower())
 
                 videos.append(
@@ -301,12 +319,16 @@ class AutopilotService:
                     vid = data.get("id")
                     title = data.get("title", "")
                     live_status = str(data.get("live_status") or "").lower()
-                    # Only skip currently active live broadcasts or upcoming premiere events
-                    if live_status in ("is_upcoming", "is_live"):
+                    is_live = bool(data.get("is_live"))
+                    # Skip currently active live broadcasts, post-live VOD encoding windows, or upcoming premiere events
+                    if is_live or live_status in ("is_upcoming", "is_live", "post_live"):
+                        logger.info("[Autopilot] Skipping '%s' from %s: currently live/post_live; will clip once stream ends.", title, channel.name)
                         continue
                     if "live event will begin" in title.lower() or "premieres in" in title.lower():
                         continue
                     dur = float(data.get("duration") or 0.0)
+                    if dur <= 0:
+                        continue
                     is_short = (0 < dur <= 60.0) or ("#shorts" in title.lower()) or ("/shorts/" in str(data.get("webpage_url") or ""))
                     if vid:
                         videos.append(

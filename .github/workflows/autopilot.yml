@@ -149,6 +149,11 @@ jobs:
             echo "::warning ::CLIENT_SECRET_JSON secret is empty in GitHub Secrets!"
           fi
 
+          if [ "$GTA_ONLY" = "true" ]; then
+            echo "Cleaning non-GTA legacy pending upload folders..."
+            rm -rf work/pending_uploads/*Hunger* work/pending_uploads/*hunger* work/pending_uploads/*Beast* work/pending_uploads/*beast* || true
+          fi
+
 
 
       - name: 🔗 Queue Manual Input URL (if provided)
