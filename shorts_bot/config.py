@@ -309,7 +309,7 @@ class Settings:
             .strip()
             .lower(),
             max_shorts_per_video=_int_env("MAX_SHORTS_PER_VIDEO", 0),
-            video_layout=os.getenv("VIDEO_LAYOUT", "fit_black").strip().lower(),
+            video_layout=os.getenv("VIDEO_LAYOUT", "blurred_background").strip().lower(),
             video_allow_upscale=_bool_env("VIDEO_ALLOW_UPSCALE", False),
             video_crf=_int_env("VIDEO_CRF", 22),
             video_preset=os.getenv("VIDEO_PRESET", "veryfast").strip().lower(),
@@ -379,7 +379,8 @@ class Settings:
             caption_highlight_colors=tuple(
                 c.strip()
                 for c in os.getenv(
-                    "CAPTION_HIGHLIGHT_COLORS", "&H0066FF00&,&H0000E6FF&,&H00FFFF00&"
+                    "CAPTION_HIGHLIGHT_COLORS",
+                    "&H001818FF&,&H0000FF33&,&H0000E6FF&,&H00FFFF00&",
                 ).split(",")
                 if c.strip()
             ),

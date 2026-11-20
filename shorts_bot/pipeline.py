@@ -13,7 +13,13 @@ from typing import Any
 
 from .ai import AIPlanner, apply_instagram_hashtags, full_coverage_plans
 from .archive import build_job_folder, open_local_folder
-from .captions import CaptionStyle, create_caption_file, parse_whisper_result
+from .captions import (
+    CaptionStyle,
+    TimedWord,
+    create_caption_file,
+    filter_and_offset_words,
+    parse_whisper_result,
+)
 from .config import Settings
 from .db import JobRepository
 from .downloader import VideoDownloader
@@ -637,7 +643,7 @@ class WorkflowPipeline:
             captions_path: Path | None = None
             if self.settings.enable_captions:
                 try:
-                    words = []
+                    words: list[TimedWord] = []
                     transcript_json_path = job_dir / "transcript-audio.json"
                     if transcript_json_path.exists():
                         try:
@@ -648,19 +654,57 @@ class WorkflowPipeline:
                     if not words and full_transcript:
                         words = parse_whisper_result(full_transcript)
 
+                    clip_words: list[TimedWord] = []
                     if words:
+                        clip_words = filter_and_offset_words(
+                            words,
+                            clip_start=plan.start_seconds,
+                            clip_duration=plan.duration_seconds,
+                        )
+
+                    # If words are missing or empty for this clip, do an on-demand transcription of
+                    # the exact 60s audio slice with Whisper (auto-detects language and guarantees subtitles)
+                    if not clip_words and source.path.exists():
+                        try:
+                            clip_audio_slice = job_dir / f"clip-{clip.clip_index:03d}-audio.mp3"
+                            if not clip_audio_slice.exists():
+                                await asyncio.to_thread(
+                                    self.services.media.extract_audio_slice,
+                                    source.path,
+                                    clip_audio_slice,
+                                    plan.start_seconds,
+                                    plan.duration_seconds,
+                                )
+                            if clip_audio_slice.exists() and clip_audio_slice.stat().st_size > 0:
+                                slice_data = await self.services.planner.transcribe_verbose(clip_audio_slice)
+                                if slice_data:
+                                    detected_lang = slice_data.get("language", "auto")
+                                    logger.info(
+                                        "Detected language '%s' for clip %d/%d; generating subtitles",
+                                        detected_lang,
+                                        clip.clip_index,
+                                        total_clips,
+                                    )
+                                    clip_words = parse_whisper_result(slice_data)
+                        except Exception as slice_exc:
+                            logger.warning("On-demand clip audio transcription error: %s", slice_exc)
+
+                    if clip_words:
                         ass_file = job_dir / f"captions-{clip.clip_index:03d}.ass"
                         style = CaptionStyle(
                             font_name=self.settings.caption_font,
                             font_size=self.settings.caption_font_size,
                             highlight_colors=self.settings.caption_highlight_colors,
-                            alignment=2 if self.settings.video_layout == "fit_black" else 5,
-                            margin_v=280 if self.settings.video_layout == "fit_black" else 0,
+                            alignment=2,
+                            margin_v=260,
+                            outline_width=5,
+                            shadow_depth=2,
+                            enable_glow=True,
                         )
                         create_caption_file(
                             output_path=ass_file,
-                            words=words,
-                            clip_start=plan.start_seconds,
+                            words=clip_words,
+                            clip_start=0.0,
                             clip_duration=plan.duration_seconds,
                             style=style,
                         )

@@ -7,13 +7,21 @@ from pathlib import Path
 from typing import Any
 
 # Viral color palette (ASS format: &HAABBGGRR& where AA is alpha 00=opaque)
-NEON_GREEN = "&H0066FF00&"   # Electric Lime/Green (#00FF66 in RGB)
-NEON_YELLOW = "&H0000E6FF&"  # Vibrant Electric Yellow (#FFE600 in RGB)
-NEON_CYAN = "&H00FFFF00&"    # Electric Cyan (#00FFFF in RGB)
-COLOR_WHITE = "&H00FFFFFF&"  # Pure White (#FFFFFF in RGB)
-COLOR_BLACK = "&H00000000&"  # Pure Black Outline
+# Calibrated to Image 2 reference: Bold White base, thick Black outline, Vibrant Red & Neon Green active highlights
+COLOR_VIBRANT_RED = "&H001818FF&"   # Bold Vibrant Red (#FF1818 in RGB) - matching "YOUR" in Image 2
+COLOR_NEON_GREEN = "&H0000FF33&"    # Bold Neon Lime Green (#33FF00 in RGB) - matching "CAR" in Image 2
+COLOR_NEON_YELLOW = "&H0000E6FF&"   # Vibrant Electric Yellow (#FFE600 in RGB)
+COLOR_NEON_CYAN = "&H00FFFF00&"     # Electric Cyan (#00FFFF in RGB)
+COLOR_WHITE = "&H00FFFFFF&"         # Pure White (#FFFFFF in RGB)
+COLOR_BLACK = "&H00000000&"         # Pure Black Outline (#000000 in RGB)
 
-DEFAULT_HIGHLIGHT_COLORS = (NEON_GREEN, NEON_YELLOW, NEON_CYAN)
+# Legacy aliases
+NEON_GREEN = COLOR_NEON_GREEN
+NEON_YELLOW = COLOR_NEON_YELLOW
+NEON_CYAN = COLOR_NEON_CYAN
+
+IMAGE2_HIGHLIGHT_COLORS = (COLOR_VIBRANT_RED, COLOR_NEON_GREEN, COLOR_NEON_YELLOW, COLOR_NEON_CYAN)
+DEFAULT_HIGHLIGHT_COLORS = IMAGE2_HIGHLIGHT_COLORS
 
 DEVANAGARI_VOWELS = {
     '\u0904': 'e', '\u0905': 'a', '\u0906': 'aa', '\u0907': 'i', '\u0908': 'ee',
@@ -147,12 +155,12 @@ class CaptionStyle:
     font_size: int = 58
     primary_color: str = COLOR_WHITE
     outline_color: str = COLOR_BLACK
-    outline_width: int = 4
-    shadow_depth: int = 0
-    alignment: int = 2  # 2 = Bottom Center (in bottom black screen)
-    margin_v: int = 280  # Positioned inside bottom black screen
-    margin_l: int = 60
-    margin_r: int = 60
+    outline_width: int = 5  # Bold thick black outline matching Image 2
+    shadow_depth: int = 2   # Clean drop shadow matching Image 2
+    alignment: int = 2      # 2 = Bottom Center (in bottom translucent screen, NOT over faces)
+    margin_v: int = 260     # Positioned cleanly inside bottom translucent screen
+    margin_l: int = 50
+    margin_r: int = 50
     highlight_colors: tuple[str, ...] = DEFAULT_HIGHLIGHT_COLORS
     max_words_per_line: int = 3
     max_lines_per_chunk: int = 2
@@ -437,10 +445,10 @@ def build_ass_subtitles(
             for j, _ in enumerate(chunk):
                 w_clean = chunk_texts[j]
                 if j == i:
-                    # Glowing active word with slight scale pop
-                    glow_tag = "\\blur5\\fscx112\\fscy112" if style.enable_glow else ""
+                    # Vibrant active word with bold black outline and scale pop matching Image 2
+                    glow_tag = "\\blur2\\fscx110\\fscy110" if style.enable_glow else "\\fscx108\\fscy108"
                     formatted_words.append(
-                        f"{{\\c{highlight_col}\\3c{highlight_col}{glow_tag}}}{w_clean}{{\\r\\c{style.primary_color}\\fn{chunk_font}\\blur2}}"
+                        f"{{\\c{highlight_col}\\3c{style.outline_color}{glow_tag}}}{w_clean}{{\\c{style.primary_color}\\3c{style.outline_color}\\fscx100\\fscy100\\blur1}}"
                     )
                 else:
                     formatted_words.append(w_clean)
@@ -449,9 +457,9 @@ def build_ass_subtitles(
                 split_at = style.max_words_per_line
                 line1 = " ".join(formatted_words[:split_at])
                 line2 = " ".join(formatted_words[split_at:])
-                display_text = f"{{\\fn{chunk_font}\\blur2\\c{style.primary_color}}}{line1}\\N{line2}"
+                display_text = f"{{\\fn{chunk_font}\\blur1\\c{style.primary_color}\\3c{style.outline_color}}}{line1}\\N{line2}"
             else:
-                display_text = f"{{\\fn{chunk_font}\\blur2\\c{style.primary_color}}}" + " ".join(formatted_words)
+                display_text = f"{{\\fn{chunk_font}\\blur1\\c{style.primary_color}\\3c{style.outline_color}}}" + " ".join(formatted_words)
 
             start_str = format_ass_time(w_start)
             end_str = format_ass_time(w_end)

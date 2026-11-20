@@ -166,6 +166,9 @@ class AIPlanner:
     async def transcribe(self, audio_path: Path) -> str:
         return await self._transcribe(audio_path)
 
+    async def transcribe_verbose(self, audio_path: Path) -> dict[str, Any]:
+        return await self._transcribe_verbose(audio_path)
+
     async def enrich_plan(
         self,
         plan: ShortPlan,
@@ -527,9 +530,11 @@ Hashtags and source credit are added by the application.
             pass
         return audio_path
 
-    async def _transcribe(self, audio_path: Path) -> str:
-        # Pre-check file size: Groq has a 25MB hard limit
-        if audio_path.exists() and audio_path.stat().st_size > 20 * 1024 * 1024:
+    async def _transcribe_verbose(self, audio_path: Path) -> dict[str, Any]:
+        """Transcribes audio using Groq Whisper with word-level timestamps and auto language detection."""
+        if not audio_path.exists():
+            return {}
+        if audio_path.stat().st_size > 20 * 1024 * 1024:
             audio_path = self._compress_audio(audio_path)
 
         result = None
@@ -543,10 +548,9 @@ Hashtags and source credit are added by the application.
                     temperature=0.0,
                 )
         except Exception as first_exc:
-            logger.warning("Groq Whisper initial transcription attempt: %s; trying compressed fallback.", first_exc)
+            logger.warning("Groq Whisper transcribe_verbose: %s; trying segment fallback", first_exc)
             if "413" in str(first_exc) or "too_large" in str(first_exc).lower() or audio_path.stat().st_size > 20 * 1024 * 1024:
                 audio_path = self._compress_audio(audio_path)
-            # Fall back to segment-only if word granularity is unsupported
             try:
                 with audio_path.open("rb") as audio_file:
                     result = await self.transcribe_client.audio.transcriptions.create(
@@ -557,26 +561,36 @@ Hashtags and source credit are added by the application.
                         temperature=0.0,
                     )
             except Exception as exc:
-                logger.warning("Groq Whisper transcription failed (%s); proceeding with empty transcript for timeline fallback.", exc)
-                return ""
+                logger.warning("Groq Whisper transcribe_verbose fallback failed: %s", exc)
+                return {}
+
+        if result is None:
+            return {}
+        if hasattr(result, "model_dump"):
+            return result.model_dump()
+        if hasattr(result, "to_dict"):
+            return result.to_dict()
+        if isinstance(result, dict):
+            return result
+        try:
+            return json.loads(str(result))
+        except Exception:
+            return {}
+
+    async def _transcribe(self, audio_path: Path) -> str:
+        data = await self._transcribe_verbose(audio_path)
+        if not data:
+            return ""
 
         # Cache raw transcription data for ASS captions
         try:
             cache_path = audio_path.with_suffix(".json")
-            if hasattr(result, "model_dump"):
-                raw_json = json.dumps(result.model_dump())
-            elif hasattr(result, "to_dict"):
-                raw_json = json.dumps(result.to_dict())
-            elif isinstance(result, dict):
-                raw_json = json.dumps(result)
-            else:
-                raw_json = str(result)
-            cache_path.write_text(raw_json, encoding="utf-8")
+            cache_path.write_text(json.dumps(data), encoding="utf-8")
         except Exception:
             pass
 
         lines: list[str] = []
-        segments = _field(result, "segments", []) or []
+        segments = _field(data, "segments", []) or []
         for segment in segments:
             start = float(_field(segment, "start", 0) or 0)
             end = float(_field(segment, "end", start) or start)
@@ -584,7 +598,7 @@ Hashtags and source credit are added by the application.
             if text:
                 lines.append(f"[{start:.2f}-{end:.2f}] {text}")
         if not lines:
-            text = str(_field(result, "text", "") or "").strip()
+            text = str(_field(data, "text", "") or "").strip()
             if text:
                 lines.append(f"[0.00] {text}")
         return "\n".join(lines)

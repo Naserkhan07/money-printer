@@ -13,7 +13,7 @@ class MediaProcessor:
         self,
         ffmpeg: str = "ffmpeg",
         ffprobe: str = "ffprobe",
-        video_layout: str = "fit_black",
+        video_layout: str = "blurred_background",
         allow_upscale: bool = False,
         video_crf: int = 18,
         video_preset: str = "slow",
@@ -105,6 +105,40 @@ class MediaProcessor:
                 logger.warning("Secondary audio compression failed: %s", exc)
         return output
 
+    def extract_audio_slice(
+        self,
+        source: Path,
+        output: Path,
+        start_seconds: float,
+        duration_seconds: float,
+    ) -> Path:
+        """Extracts a short, high-quality audio slice for on-demand clip transcription."""
+        output.parent.mkdir(parents=True, exist_ok=True)
+        self._run(
+            [
+                self.ffmpeg,
+                "-y",
+                "-ss",
+                f"{max(0.0, start_seconds):.3f}",
+                "-i",
+                str(source),
+                "-t",
+                f"{max(1.0, duration_seconds):.3f}",
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-c:a",
+                "libmp3lame",
+                "-b:a",
+                "48k",
+                str(output),
+            ],
+            timeout=120,
+        )
+        return output
+
     def render_short(
         self,
         source: Path,
@@ -191,7 +225,7 @@ class MediaProcessor:
                     video_filter = (
                         "[0:v]split=2[bg][fg];"
                         "[bg]scale=1080:1920:force_original_aspect_ratio=increase,"
-                        "crop=1080:1920,boxblur=30:2[blurred];"
+                        "crop=1080:1920,boxblur=25:5,drawbox=color=black@0.45:width=iw:height=ih:t=fill[blurred];"
                         "[fg]scale=1080:1920:force_original_aspect_ratio=decrease[front];"
                         f"[blurred][front]overlay=(W-w)/2:(H-h)/2,setsar=1[base];"
                         f"[base]ass='{sub_escaped}'[v]"
@@ -200,7 +234,7 @@ class MediaProcessor:
                     video_filter = (
                         "[0:v]split=2[bg][fg];"
                         "[bg]scale=1080:1920:force_original_aspect_ratio=increase,"
-                        "crop=1080:1920,boxblur=30:2[blurred];"
+                        "crop=1080:1920,boxblur=25:5,drawbox=color=black@0.45:width=iw:height=ih:t=fill[blurred];"
                         "[fg]scale=1080:1920:force_original_aspect_ratio=decrease[front];"
                         "[blurred][front]overlay=(W-w)/2:(H-h)/2,setsar=1[v]"
                     )
@@ -314,7 +348,7 @@ class MediaProcessor:
             thumbnail_filter = (
                 "[0:v]split=2[bg][fg];"
                 "[bg]scale=1280:720:force_original_aspect_ratio=increase,"
-                "crop=1280:720,boxblur=20:2[blurred];"
+                "crop=1280:720,boxblur=20:2,drawbox=color=black@0.45:width=iw:height=ih:t=fill[blurred];"
                 "[fg]scale=1280:720:force_original_aspect_ratio=decrease[front];"
                 "[blurred][front]overlay=(W-w)/2:(H-h)/2"
             )
