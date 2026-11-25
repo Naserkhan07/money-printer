@@ -1,7 +1,6 @@
 # Add one authorized YouTube video URL per line below.
 # A URL is removed atomically as soon as that video has downloaded successfully.
 # Downloaded URLs are recorded in work/downloaded-links.log.
-https://www.youtube.com/watch?v=mSzxT89FhTs
 https://www.youtube.com/watch?v=ElMCYc9e3Ao
 https://www.youtube.com/watch?v=slPlJaZG8ww
 https://www.youtube.com/watch?v=n4kcJb5CWUQ
